@@ -1,0 +1,287 @@
+package com.smartdata.smartruledatagen.generator.util;
+
+import com.smartdata.smartruledatagen.generator.exception.DependencyNotMetException;
+import com.smartdata.smartruledatagen.model.CustMgrData;
+import com.smartdata.smartruledatagen.service.ReferenceDataManager;
+import com.smartdata.smartruledatagen.util.DateUtil;
+import lombok.extern.slf4j.Slf4j;
+
+import java.lang.reflect.Method;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+@Slf4j
+public class ExpressionEvaluator {
+    private final ReferenceDataManager referenceDataManager;
+    private final Random random = new Random();
+    private static final DateTimeFormatter ORDER_NO_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+
+    public ExpressionEvaluator(ReferenceDataManager referenceDataManager) {
+        this.referenceDataManager = referenceDataManager;
+    }
+
+    // 用于评估表达式。它会尝试解析表达式，支持简单字符串拼接、数字运算、方法调用
+    // 这是一个非常简化的版本，对于复杂表达式需要引入真实的脚本引擎
+    public Object evaluate(String expression, Map<String, Object> recordData, Map<String, Object> params) {
+        if (expression == null || expression.trim().isEmpty()) {
+            return null;
+        }
+
+        // 预处理：替换变量
+        // 注意：这种简单的替换可能会破坏字符串常量中的内容，但在当前受控环境下尚可接受
+        // 为了支持像 "cur_package_paid_amount + randomInt(-100, 100)" 这样的表达式
+        
+        // 1. 尝试解析为算术表达式 (目前仅支持 A + B 或 A - B，其中 A, B 可以是变量或函数)
+        // 简单的加减法解析器，不支持嵌套括号优先级，仅支持顶级加减
+        if (isArithmeticExpression(expression)) {
+            return evaluateArithmetic(expression, recordData, params);
+        }
+
+        // 尝试解析为固定值
+        if (expression.startsWith("'") && expression.endsWith("'")) {
+            return expression.substring(1, expression.length() - 1);
+        }
+        if ("NULL".equalsIgnoreCase(expression)) {
+            return null;
+        }
+        try {
+            return Integer.parseInt(expression);
+        } catch (NumberFormatException e) {
+            // Not an integer, continue
+        }
+        try {
+            return Double.parseDouble(expression);
+        } catch (NumberFormatException e) {
+            // Not a double, continue
+        }
+        if ("true".equalsIgnoreCase(expression) || "false".equalsIgnoreCase(expression)) {
+            return Boolean.parseBoolean(expression);
+        }
+
+
+        // 尝试解析为字段引用
+        if (recordData.containsKey(expression)) {
+            return recordData.get(expression);
+        }
+
+        // 尝试解析为参数引用
+        if (expression.startsWith("param.")) {
+            String paramName = expression.substring("param.".length());
+            if (params.containsKey(paramName)) {
+                return params.get(paramName);
+            }
+        }
+
+        // 尝试解析为函数调用
+        if (expression.contains("(")) {
+            // 简单处理：lookupCustMgrField(cust_mgr_id, 'custMgrName')
+            // lookupEnumCode('expect_renew_type', expect_renew_type)
+            Pattern funcPattern = Pattern.compile("(\\w+)\\((.*)\\)");
+            Matcher funcMatcher = funcPattern.matcher(expression);
+            if (funcMatcher.find()) {
+                String funcName = funcMatcher.group(1);
+                String argsStr = funcMatcher.group(2);
+                String[] args = argsStr.split("\\s*,\\s*"); // 分割参数
+
+                switch (funcName) {
+                    case "randomInt":
+                        if (args.length == 2) {
+                            int min = (int) evaluate(args[0], recordData, params);
+                            int max = (int) evaluate(args[1], recordData, params);
+                            return ThreadLocalRandom.current().nextInt(min, max + 1);
+                        }
+                        break;
+                    case "randomDateInCurrentMonth":
+                        LocalDate now = LocalDate.now();
+                        int dayOfMonth = now.getDayOfMonth();
+                        int randomDay = ThreadLocalRandom.current().nextInt(1, dayOfMonth + 1);
+                        return now.withDayOfMonth(randomDay);
+                    case "getCurrentMonth":
+                         // 支持可选参数：offset (months)
+                         int offset = 0;
+                         if (args.length > 0 && !args[0].isEmpty()) {
+                             Object offsetObj = evaluate(args[0], recordData, params);
+                             if (offsetObj instanceof Number) {
+                                 offset = ((Number) offsetObj).intValue();
+                             }
+                         }
+                         return DateUtil.formatMonth(LocalDate.now().plusMonths(offset));
+                    case "lookupProvinceByRegion":
+                        if (args.length == 1) {
+                            String regionCode = (String) evaluate(args[0], recordData, params);
+                            return referenceDataManager.getProvinceCodeByBigRegion(regionCode);
+                        }
+                        return "440000"; // default
+                    case "generateOrderNo":
+                        // 生成 yyyyMMddHHmmss + 15位随机数
+                        String dateStr = java.time.LocalDateTime.now().format(ORDER_NO_DATE_FORMAT);
+                        StringBuilder sb = new StringBuilder(dateStr);
+                        for (int i = 0; i < 15; i++) {
+                            sb.append(random.nextInt(10));
+                        }
+                        return sb.toString();
+                    case "randomBoolean":
+                        if (args.length == 1) {
+                            double probability = (double) evaluate(args[0], recordData, params);
+                            return random.nextDouble() < probability;
+                        }
+                        break;
+                    case "lookupCustMgrField":
+                        if (args.length == 2) {
+                            Object custMgrIdObj = evaluate(args[0], recordData, params);
+                            String fieldName = (String) evaluate(args[1], recordData, params);
+                            if (custMgrIdObj instanceof String custMgrId) {
+                                Optional<CustMgrData> custMgrData = referenceDataManager.getCustMgrById(custMgrId);
+                                if (custMgrData.isPresent()) {
+                                    return getCustMgrField(custMgrData.get(), fieldName);
+                                }
+                            }
+                        }
+                        return null;
+                    case "lookupEnumCode":
+                    case "lookupEnumName":
+                        if (args.length == 2) {
+                            String category = (String) evaluate(args[0], recordData, params);
+                            Object valueToLookup = evaluate(args[1], recordData, params);
+                            if (valueToLookup instanceof String lookupValue) {
+                                if ("lookupEnumCode".equals(funcName)) {
+                                    return referenceDataManager.getEnumByName(category, lookupValue)
+                                            .map(e -> e.getCode())
+                                            .orElse(null);
+                                } else { // lookupEnumName
+                                    return referenceDataManager.getEnumByCode(category, lookupValue)
+                                            .map(e -> e.getName())
+                                            .orElse(null);
+                                }
+                            }
+                        }
+                        return null;
+                    case "formatMonth":
+                    case "formatDate":
+                        if (args.length == 1) {
+                            Object dateObj = evaluate(args[0], recordData, params);
+                            LocalDate date = null;
+                            if (dateObj instanceof LocalDate) {
+                                date = (LocalDate) dateObj;
+                            } else if (dateObj instanceof String) {
+                                try {
+                                    // 尝试解析 yyyy-MM-dd
+                                    date = LocalDate.parse((String) dateObj);
+                                } catch (Exception e) {
+                                    // ignore
+                                }
+                            }
+                            
+                            if (date != null) {
+                                return "formatMonth".equals(funcName) ? DateUtil.formatMonth(date) : DateUtil.formatDate(date);
+                            }
+                        }
+                        return null;
+                    // TODO: Add more helper functions as needed
+                }
+            }
+        }
+
+        // 尝试处理简单的字符串连接和字段引用
+        // 示例: "'测试客户_' + customer_id.substring(0, 8)"
+        // 这部分会非常复杂，建议使用一个真正的脚本引擎或限制表达式的复杂性
+        // 对于这个示例，我们只支持简单字段引用和字符串拼接
+        if (expression.contains("+") || expression.contains("substring")) {
+            // 简单解析 'xxx' + field + 'yyy' 或 field.substring(...)
+            String result = expression;
+            for (Map.Entry<String, Object> entry : recordData.entrySet()) {
+                result = result.replace(entry.getKey(), String.valueOf(entry.getValue()));
+            }
+            // 替换参数
+            for (Map.Entry<String, Object> entry : params.entrySet()) {
+                result = result.replace("param." + entry.getKey(), String.valueOf(entry.getValue()));
+            }
+            // 移除字符串引号，进行连接（非常原始的实现）
+            result = result.replace("'", "");
+            result = result.replace(" ", ""); // 移除空格
+            // 如果还包含 + 符号，尝试拼接
+            if (result.contains("+")) {
+                StringBuilder finalResult = new StringBuilder();
+                for (String part : result.split("\\+")) {
+                    finalResult.append(part);
+                }
+                return finalResult.toString();
+            }
+            // 如果包含 substring，尝试简单执行
+            if (result.contains(".substring(")) {
+                Pattern substringPattern = Pattern.compile("(\\w+)\\.substring\\((\\d+)(,\\s*(\\d+))?\\)");
+                Matcher substringMatcher = substringPattern.matcher(result);
+                if (substringMatcher.find()) {
+                    String target = substringMatcher.group(1); // 目标变量名
+                    int start = Integer.parseInt(substringMatcher.group(2));
+                    Integer end = substringMatcher.group(4) != null ? Integer.parseInt(substringMatcher.group(4)) : null;
+
+                    Object targetValue = recordData.get(target);
+                    if (targetValue instanceof String strValue) {
+                        return end != null ? strValue.substring(start, end) : strValue.substring(start);
+                    }
+                }
+            }
+            return result; // 简化处理，直接返回替换后的字符串
+        }
+
+        log.debug("Could not evaluate expression: {}. Throwing DependencyNotMetException.", expression);
+        throw new DependencyNotMetException("Dependency not met for expression: " + expression);
+    }
+
+
+    private Object getCustMgrField(CustMgrData data, String fieldName) {
+        try {
+            // 使用反射获取 CustMgrData 的字段值
+            // Lombok 生成的 getter 方法名是 getFieldName()
+            String getterMethodName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+            Method method = CustMgrData.class.getMethod(getterMethodName);
+            return method.invoke(data);
+        } catch (Exception e) {
+            log.error("Failed to get field {} from CustMgrData using reflection.", fieldName, e);
+            return null;
+        }
+    }
+
+    private boolean isArithmeticExpression(String expression) {
+        // 排除掉函数调用中的参数分隔符，这里简单假设算术运算不包含在引号内
+        // 且必须包含 + 或 -，但不是开头（负数）
+        // 这是一个非常简陋的检查
+        if (expression.startsWith("'")) return false;
+        // 忽略 randomInt(-100, 100) 中的负号
+        // 简单策略：如果存在 " + " 或 " - " (前后有空格)，则认为是算术运算
+        return expression.contains(" + ") || expression.contains(" - ");
+    }
+
+    private Object evaluateArithmetic(String expression, Map<String, Object> recordData, Map<String, Object> params) {
+        // 简单分割，不支持混合运算顺序，从左到右
+        // 这里的实现仅支持 A + B 或 A - B
+        String operator = expression.contains(" + ") ? "\\+" : "-";
+        String splitRegex = expression.contains(" + ") ? " \\+ " : " - ";
+        
+        String[] parts = expression.split(splitRegex, 2); // 只分割第一个运算符
+        if (parts.length != 2) return null;
+        
+        Object leftVal = evaluate(parts[0].trim(), recordData, params);
+        Object rightVal = evaluate(parts[1].trim(), recordData, params);
+        
+        if (leftVal instanceof Number && rightVal instanceof Number) {
+            double l = ((Number) leftVal).doubleValue();
+            double r = ((Number) rightVal).doubleValue();
+            double result = expression.contains(" + ") ? l + r : l - r;
+            
+            // 如果两个都是整数，返回整数
+            if (leftVal instanceof Integer && rightVal instanceof Integer) {
+                return (int) result;
+            }
+            return result;
+        }
+        return null;
+    }
+}

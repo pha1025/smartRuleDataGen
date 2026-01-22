@@ -1,0 +1,29 @@
+# ... (DataSource and Excel configs remain mostly the same)
+spring:
+  datasource:
+    db1: # 例如用于 ads_trade_kpi_zx_order_payment_cust_rt:中小业绩统计
+      jdbc-url: jdbc:mysql://starrocks-test.dc.servyou-it.com:9030/servyou_ads?useSSL=false&serverTimezone=UTC
+      username: root
+      password: test_user_pass66
+      driver-class-name: com.mysql.cj.jdbc.Driver
+    db2: # 例如用于 ads_itcrm_customer_review_zx_product_expire:中小客户盘点
+      jdbc-url: jdbc:mysql://starrocks-test.dc.servyou-it.com:9030/cctest_not_delete?useSSL=false&serverTimezone=UTC
+      username: root
+      password: test_user_pass66
+      driver-class-name: com.mysql.cj.jdbc.Driver
+
+excel:
+  # 客户经理层级数据文件路径
+  cust-mgr-data-path: src/main/resources/data/cust_mgr_hierarchy.xlsx
+  # 枚举字典数据文件路径 (假设都集中在一个文件里)
+  enum-data-path: src/main/resources/data/enum_dictionaries.xlsx
+  # group_id 查找表 (如果单独维护)
+#  group-relation-path: src/main/resources/data/cust_group_relation_hb_sr.xlsx
+  # 客户数据文件路径 (新增)
+  customer-data-path: src/main/resources/data/customer_data.xlsx
+
+sql:
+  template-base-path: sql/templates/ # 依然可以使用Java中的Map存储模板
+
+generator:
+  rules-path: classpath:generator-rules.yml # 新增：规则文件路径
