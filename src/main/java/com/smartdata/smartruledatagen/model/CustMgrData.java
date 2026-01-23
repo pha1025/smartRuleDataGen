@@ -11,6 +11,6 @@ public class CustMgrData {
     private String custMgrId;            // 例如 "57266D99C9FB72AD09BFBFF4B8AC0218"
     private String custMgrName;          // 例如 "李莉"
     // 如果 group_id 可以直接从这个Excel中查到，可以加在这里
-    private String groupId;
-    private String groupName;
+    private String custMgrGroupId;
+    private String custMgrGroupName;
 }

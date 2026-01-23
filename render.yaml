@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: smartruledatagen # 这里给你的服务起个名字
+    env: java # 指定环境为 Java
+    plan: free # 指定使用免费套餐
+    buildCommand: "./mvnw clean package -DskipTests" # 构建命令：使用 Maven Wrapper 打包，跳过测试
+    startCommand: "java -jar target/*.jar --server.port=$PORT" # 启动命令：关键在于最后指定端口！
+    envVars:
+      - key: JAVA_VERSION
+        value: "17" # 根据你的 JDK 版本修改 (11, 17, 21 等)

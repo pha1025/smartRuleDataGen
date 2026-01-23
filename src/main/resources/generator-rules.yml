@@ -246,6 +246,12 @@ generators:
     dbKey: "db1"
     sqlTemplateKey: "trade_kpi_payment"
     fields:
+      - name: "_cust_mgr_big_region_code" # 隐藏字段，用于依赖计算
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        includeInSql: false
+        expression: "lookupCustMgrField(cust_mgr_id, 'custMgrBigRegionCode')"
+        nullable: false
       - name: "payment_date"
         type: "DATE"
         sqlType: "DATE"
@@ -324,33 +330,33 @@ generators:
         min: 100
         max: 5000
         nullable: false
-      - name: "cust_mgr_big_region_code"
-        type: "EXPRESSION"
-        sqlType: "VARCHAR"
-        expression: "lookupCustMgrField(cust_mgr_id, 'custMgrBigRegionCode')"
-        nullable: false
       - name: "zx_group_payment_amount"
         type: "CONDITIONAL"
         sqlType: "INT"
         nullable: true
         conditions:
-          - ifExpression: "cust_mgr_big_region_code == '004012022'"
+          - ifExpression: "_cust_mgr_big_region_code == '004012022'"
             thenValue: "zx_payment_amount"
           - elseValue: "NULL"
       - name: "group_id"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
-        expression: "lookupCustMgrField(cust_mgr_id, 'groupId')"
+        expression: "lookupCustMgrField(cust_mgr_id, 'custMgrGroupId')"
         nullable: true
       - name: "group_name"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
-        expression: "lookupCustMgrField(cust_mgr_id, 'groupName')"
+        expression: "lookupCustMgrField(cust_mgr_id, 'custMgrGroupName')"
         nullable: true
       - name: "zx_assessment_payment_amount"
         type: "STATIC"
         sqlType: "INT"
         value: "0"
+        nullable: false
+      - name: "cust_mgr_big_region_code"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "_cust_mgr_big_region_code" # 引用隐藏字段，避免重复计算
         nullable: false
       - name: "cust_mgr_big_region_name"
         type: "EXPRESSION"
@@ -360,30 +366,12 @@ generators:
       - name: "income_khjl_big_region_code"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
-        expression: "cust_mgr_big_region_code"
+        expression: "_cust_mgr_big_region_code"
         nullable: false
       - name: "income_khjl_big_region_name"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
         expression: "cust_mgr_big_region_name"
-        nullable: false
-      - name: "customer_id"
-        type: "REFERENCE_DATA"
-        sqlType: "VARCHAR"
-        refDataType: "CustomerData"
-        lookupKeyField: "type"
-        lookupValueSource: "1" # Default to Type 1
-        fieldToPopulate: "id"
-        defaultNotFoundValue: "CUST_DEFAULT"
-        nullable: false
-      - name: "customer_name"
-        type: "REFERENCE_DATA"
-        sqlType: "VARCHAR"
-        refDataType: "CustomerData"
-        lookupKeyField: "id"
-        lookupValueSource: "customer_id"
-        fieldToPopulate: "name"
-        dependsOn: "customer_id"
         nullable: false
 
   tradeKpiPaymentDetail:

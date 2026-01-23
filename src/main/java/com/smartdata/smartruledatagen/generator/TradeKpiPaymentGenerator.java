@@ -70,9 +70,9 @@ public class TradeKpiPaymentGenerator extends AbstractTableGenerator {
                 //     groupName = quote("对应组名"); // 假设也能查到组名
                 // }
                 // 简化：这里我们直接从 CustMgrData 中获取，如果 CustMgrData 包含了 group_id
-                if (custMgr != null && custMgr.getGroupId() != null) {
-                    groupId = quote(custMgr.getGroupId());
-                    groupName = quote(custMgr.getGroupName());
+                if (custMgr != null && custMgr.getCustMgrGroupId() != null) {
+                    groupId = quote(custMgr.getCustMgrGroupId());
+                    groupName = quote(custMgr.getCustMgrGroupName());
                 } else {
                     // 如果大区匹配但没查到 group_id, 仍然是 NULL
                     groupId = quote((String) null);

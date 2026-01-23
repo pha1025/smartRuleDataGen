@@ -14,9 +14,9 @@ public class SqlTemplateRepository {
         // 例1: ads_trade_kpi_zx_order_payment_cust_rt 模板
         templates.put("trade_kpi_payment",
                 "INSERT INTO servyou_ads.ads_trade_kpi_zx_order_payment_cust_rt\n" +
-                        "(payment_date, outlet_code, outlet_name, income_type, trade_type, cust_mgr_id, cust_mgr_name, cust_mgr_outlet_code, cust_mgr_outlet_name, income_khjl_id, income_khjl_name, income_khjl_outlet_code, income_khjl_outlet_name, zx_payment_amount, zx_group_payment_amount, group_id, group_name, zx_assessment_payment_amount, cust_mgr_big_region_code, cust_mgr_big_region_name, income_khjl_big_region_code, income_khjl_big_region_name, customer_id, customer_name)\n" +
+                        "(payment_date, outlet_code, outlet_name, income_type, trade_type, cust_mgr_id, cust_mgr_name, cust_mgr_outlet_code, cust_mgr_outlet_name, income_khjl_id, income_khjl_name, income_khjl_outlet_code, income_khjl_outlet_name, zx_payment_amount, zx_group_payment_amount, group_id, group_name, zx_assessment_payment_amount, cust_mgr_big_region_code, cust_mgr_big_region_name, income_khjl_big_region_code, income_khjl_big_region_name)\n" +
                         "VALUES\n" +
-                        "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)");
+                        "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)");
 
         // 例3: ads_trade_kpi_zx_order_payment_detail_rt 模板 (Generator 3)
         templates.put("trade_kpi_payment_detail",

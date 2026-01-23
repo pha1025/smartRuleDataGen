@@ -46,8 +46,8 @@ public class ExcelDataLoaderService {
                 data.setCustMgrName(getCellValue(row.getCell(5)));
 
                 // 如果Excel中包含groupId/groupName，继续解析
-                data.setGroupId(getCellValue(row.getCell(6)));
-                data.setGroupName(getCellValue(row.getCell(7)));
+                data.setCustMgrGroupId(getCellValue(row.getCell(6)));
+                data.setCustMgrGroupName(getCellValue(row.getCell(7)));
 
                 dataList.add(data);
             }
