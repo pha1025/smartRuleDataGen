@@ -5,11 +5,11 @@ import com.smartdata.smartruledatagen.model.CustomerData;
 import com.smartdata.smartruledatagen.model.EnumMapping;
 import com.smartdata.smartruledatagen.model.RegionProvinceData;
 import org.apache.poi.ss.usermodel.*;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -18,9 +18,19 @@ import java.util.Map;
 @Service
 public class ExcelDataLoaderService {
 
+    private String cleanPath(String path) {
+        if (path.startsWith("src/main/resources/")) {
+            return path.substring("src/main/resources/".length());
+        }
+        return path;
+    }
+
     public List<CustMgrData> loadCustMgrData(String filePath) {
         List<CustMgrData> dataList = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(new File(filePath));
+        filePath = cleanPath(filePath);
+        ClassPathResource resource = new ClassPathResource(filePath);
+        
+        try (InputStream fis = resource.getInputStream();
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0); // 假设在第一个sheet
@@ -61,7 +71,10 @@ public class ExcelDataLoaderService {
 
     public Map<String, List<EnumMapping>> loadEnumMappings(String filePath) {
         Map<String, List<EnumMapping>> enumMap = new HashMap<>();
-        try (FileInputStream fis = new FileInputStream(new File(filePath));
+        filePath = cleanPath(filePath);
+        ClassPathResource resource = new ClassPathResource(filePath);
+
+        try (InputStream fis = resource.getInputStream();
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             // 假设每个sheet代表一个枚举类别 (e.g., sheet1: business_class, sheet2: order_type)
@@ -98,7 +111,10 @@ public class ExcelDataLoaderService {
 
     public List<CustomerData> loadCustomerData(String filePath) {
         List<CustomerData> dataList = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(new File(filePath));
+        filePath = cleanPath(filePath);
+        ClassPathResource resource = new ClassPathResource(filePath);
+
+        try (InputStream fis = resource.getInputStream();
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);
@@ -131,12 +147,14 @@ public class ExcelDataLoaderService {
     public List<RegionProvinceData> loadRegionProvinceData(String filePath) {
         List<RegionProvinceData> dataList = new ArrayList<>();
         // 如果文件不存在，返回空列表
-        File file = new File(filePath);
-        if (!file.exists()) {
+        filePath = cleanPath(filePath);
+        ClassPathResource resource = new ClassPathResource(filePath);
+        
+        if (!resource.exists()) {
             return dataList;
         }
 
-        try (FileInputStream fis = new FileInputStream(file);
+        try (InputStream fis = resource.getInputStream();
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);

@@ -14,13 +14,13 @@ spring:
 
 excel:
   # 客户经理层级数据文件路径
-  cust-mgr-data-path: src/main/resources/data/cust_mgr_hierarchy.xlsx
+  cust-mgr-data-path: data/cust_mgr_hierarchy.xlsx
   # 枚举字典数据文件路径 (假设都集中在一个文件里)
-  enum-data-path: src/main/resources/data/enum_dictionaries.xlsx
+  enum-data-path: data/enum_dictionaries.xlsx
   # group_id 查找表 (如果单独维护)
-#  group-relation-path: src/main/resources/data/cust_group_relation_hb_sr.xlsx
+#  group-relation-path: data/cust_group_relation_hb_sr.xlsx
   # 客户数据文件路径 (新增)
-  customer-data-path: src/main/resources/data/customer_data.xlsx
+  customer-data-path: data/customer_data.xlsx
 
 sql:
   template-base-path: sql/templates/ # 依然可以使用Java中的Map存储模板

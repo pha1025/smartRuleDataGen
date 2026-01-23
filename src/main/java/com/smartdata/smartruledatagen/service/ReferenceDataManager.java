@@ -33,10 +33,10 @@ public class ReferenceDataManager {
     @Value("${excel.enum-data-path}")
     private String enumDataPath;
 
-    @Value("${excel.customer-data-path:src/main/resources/data/customer_data.xlsx}")
+    @Value("${excel.customer-data-path:data/customer_data.xlsx}")
     private String customerDataPath;
 
-    @Value("${excel.region-province-data-path:src/main/resources/data/region_province.xlsx}")
+    @Value("${excel.region-province-data-path:data/region_province.xlsx}")
     private String regionProvinceDataPath;
 
     // 存储客户经理层级数据，按大区代码分组
