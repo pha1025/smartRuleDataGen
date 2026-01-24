@@ -33,33 +33,43 @@ public class ExcelDataLoaderService {
         try (InputStream fis = resource.getInputStream();
              Workbook workbook = WorkbookFactory.create(fis)) {
 
-            Sheet sheet = workbook.getSheetAt(0); // 假设在第一个sheet
-            boolean firstRow = true;
-            for (Row row : sheet) {
-                if (firstRow) { // 跳过表头
-                    firstRow = false;
-                    continue;
+            // 遍历所有 Sheet
+            for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                Sheet sheet = workbook.getSheetAt(i);
+                String sheetName = sheet.getSheetName(); // Sheet名为 Big Region Code
+                
+                boolean firstRow = true;
+                for (Row row : sheet) {
+                    if (firstRow) { // 跳过表头
+                        firstRow = false;
+                        continue;
+                    }
+                    if (row.getCell(0) == null || row.getCell(0).getCellType() == CellType.BLANK) {
+                        continue; // 跳过空行
+                    }
+
+                    CustMgrData data = new CustMgrData();
+                    // 根据变更：Sheet名称即为 Big Region Code
+                    // 如果Excel第一列仍是大区代码，可以覆盖或校验；这里我们优先使用Sheet名作为大区代码，或者如果单元格为空则使用Sheet名
+                    String regionCodeInCell = getCellValue(row.getCell(0));
+                    if (regionCodeInCell != null && !regionCodeInCell.isEmpty()) {
+                        data.setCustMgrBigRegionCode(regionCodeInCell);
+                    } else {
+                        data.setCustMgrBigRegionCode(sheetName);
+                    }
+                    
+                    data.setCustMgrBigRegionName(getCellValue(row.getCell(1))); // 假设大区名称在第2列
+                    data.setCustMgrOutletCode(getCellValue(row.getCell(2)));
+                    data.setCustMgrOutletName(getCellValue(row.getCell(3)));
+                    data.setCustMgrId(getCellValue(row.getCell(4)));
+                    data.setCustMgrName(getCellValue(row.getCell(5)));
+
+                    // 如果Excel中包含groupId/groupName，继续解析
+                    data.setCustMgrGroupId(getCellValue(row.getCell(6)));
+                    data.setCustMgrGroupName(getCellValue(row.getCell(7)));
+
+                    dataList.add(data);
                 }
-                if (row.getCell(0) == null || row.getCell(0).getCellType() == CellType.BLANK) {
-                    continue; // 跳过空行
-                }
-
-                CustMgrData data = new CustMgrData();
-                // 根据您图片中的Excel结构解析
-                // 假设列顺序是：大区代码，客户经理ID，客户经理名称，网点代码，网点名称，大区名称
-                // 需要您根据实际Excel列与模型字段的对应关系进行调整
-                data.setCustMgrBigRegionCode(getCellValue(row.getCell(0)));
-                data.setCustMgrBigRegionName(getCellValue(row.getCell(1))); // 假设大区名称在第6列
-                data.setCustMgrOutletCode(getCellValue(row.getCell(2)));
-                data.setCustMgrOutletName(getCellValue(row.getCell(3)));
-                data.setCustMgrId(getCellValue(row.getCell(4)));
-                data.setCustMgrName(getCellValue(row.getCell(5)));
-
-                // 如果Excel中包含groupId/groupName，继续解析
-                data.setCustMgrGroupId(getCellValue(row.getCell(6)));
-                data.setCustMgrGroupName(getCellValue(row.getCell(7)));
-
-                dataList.add(data);
             }
 
         } catch (IOException e) {
@@ -117,25 +127,38 @@ public class ExcelDataLoaderService {
         try (InputStream fis = resource.getInputStream();
              Workbook workbook = WorkbookFactory.create(fis)) {
 
-            Sheet sheet = workbook.getSheetAt(0);
-            boolean firstRow = true;
-            for (Row row : sheet) {
-                if (firstRow) {
-                    firstRow = false;
-                    continue;
-                }
-                if (row.getCell(0) == null || row.getCell(0).getCellType() == CellType.BLANK) {
-                    continue;
-                }
+            // 遍历所有 Sheet
+            for (int i = 0; i < workbook.getNumberOfSheets(); i++) {
+                Sheet sheet = workbook.getSheetAt(i);
+                String sheetName = sheet.getSheetName(); // Sheet名为 Customer Type
 
-                CustomerData data = new CustomerData();
-                // Assumed columns: 0: customer_id, 1: customer_name, 2: customer_type, 3: customer_manage_id
-                data.setCustomerId(getCellValue(row.getCell(0)));
-                data.setCustomerName(getCellValue(row.getCell(1)));
-                data.setCustomerType(getCellValue(row.getCell(2)));
-                data.setCustomerManageId(getCellValue(row.getCell(3)));
+                boolean firstRow = true;
+                for (Row row : sheet) {
+                    if (firstRow) {
+                        firstRow = false;
+                        continue;
+                    }
+                    if (row.getCell(0) == null || row.getCell(0).getCellType() == CellType.BLANK) {
+                        continue;
+                    }
 
-                dataList.add(data);
+                    CustomerData data = new CustomerData();
+                    // Assumed columns: 0: customer_id, 1: customer_name, 2: customer_type, 3: customer_manage_id
+                    data.setCustomerId(getCellValue(row.getCell(0)));
+                    data.setCustomerName(getCellValue(row.getCell(1)));
+                    
+                    // 优先使用 Sheet 名作为 Type，如果单元格里有值且不为空，也可以使用（或者校验）
+                    String typeInCell = getCellValue(row.getCell(2));
+                    if (typeInCell != null && !typeInCell.isEmpty()) {
+                        data.setCustomerType(typeInCell);
+                    } else {
+                        data.setCustomerType(sheetName);
+                    }
+                    
+                    data.setCustomerManageId(getCellValue(row.getCell(3)));
+
+                    dataList.add(data);
+                }
             }
 
         } catch (IOException e) {
@@ -186,7 +209,7 @@ public class ExcelDataLoaderService {
         if (cell == null) {
             return null;
         }
-        return switch (cell.getCellType()) {
+        String value = switch (cell.getCellType()) {
             case STRING -> cell.getStringCellValue();
             case NUMERIC -> String.valueOf((long) cell.getNumericCellValue()); // 防止数字被读成浮点数
             case BOOLEAN -> String.valueOf(cell.getBooleanCellValue());
@@ -194,5 +217,6 @@ public class ExcelDataLoaderService {
             case BLANK -> null;
             default -> null;
         };
+        return value != null ? value.trim() : null;
     }
 }

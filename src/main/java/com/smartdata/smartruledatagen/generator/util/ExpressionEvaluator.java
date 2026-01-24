@@ -16,11 +16,14 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import java.util.List;
+
 @Slf4j
 public class ExpressionEvaluator {
     private final ReferenceDataManager referenceDataManager;
     private final Random random = new Random();
     private static final DateTimeFormatter ORDER_NO_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+    private static final DateTimeFormatter DETAIL_ORDER_NO_FORMAT = DateTimeFormatter.ofPattern("yyyyMMddHHmmss"); // Same for now
 
     public ExpressionEvaluator(ReferenceDataManager referenceDataManager) {
         this.referenceDataManager = referenceDataManager;
@@ -41,6 +44,11 @@ public class ExpressionEvaluator {
         // 简单的加减法解析器，不支持嵌套括号优先级，仅支持顶级加减
         if (isArithmeticExpression(expression)) {
             return evaluateArithmetic(expression, recordData, params);
+        }
+
+        // 2. 尝试解析为比较表达式 (支持 == 和 !=)
+        if (isComparisonExpression(expression)) {
+            return evaluateComparison(expression, recordData, params);
         }
 
         // 尝试解析为固定值
@@ -112,6 +120,28 @@ public class ExpressionEvaluator {
                              }
                          }
                          return DateUtil.formatMonth(LocalDate.now().plusMonths(offset));
+                    case "randomCustMgrInRegion":
+                        // Args: regionCode, fieldName
+                        if (args.length == 2) {
+                            String regionCode = (String) evaluate(args[0], recordData, params);
+                            String fieldName = (String) evaluate(args[1], recordData, params);
+                            
+                            List<CustMgrData> mgrs = referenceDataManager.getCustMgrsByBigRegion(regionCode);
+                            if (mgrs != null && !mgrs.isEmpty()) {
+                                CustMgrData randomMgr = mgrs.get(random.nextInt(mgrs.size()));
+                                return getCustMgrField(randomMgr, fieldName);
+                            }
+                        }
+                        return null;
+                    case "generateDetailOrderId":
+                        // 格式：yyyyMMddHHmmss + 15位随机数 (共29位)
+                        // 示例：20250917001148711015020000045
+                        String detailDateStr = java.time.LocalDateTime.now().format(DETAIL_ORDER_NO_FORMAT);
+                        StringBuilder detailSb = new StringBuilder(detailDateStr);
+                        for (int i = 0; i < 15; i++) {
+                            detailSb.append(random.nextInt(10));
+                        }
+                        return detailSb.toString();
                     case "lookupProvinceByRegion":
                         if (args.length == 1) {
                             String regionCode = (String) evaluate(args[0], recordData, params);
@@ -257,6 +287,25 @@ public class ExpressionEvaluator {
         // 忽略 randomInt(-100, 100) 中的负号
         // 简单策略：如果存在 " + " 或 " - " (前后有空格)，则认为是算术运算
         return expression.contains(" + ") || expression.contains(" - ");
+    }
+
+    private boolean isComparisonExpression(String expression) {
+        return expression.contains(" == ") || expression.contains(" != ");
+    }
+
+    private Boolean evaluateComparison(String expression, Map<String, Object> recordData, Map<String, Object> params) {
+        String operator = expression.contains(" == ") ? " == " : " != ";
+        String[] parts = expression.split(operator, 2);
+        if (parts.length != 2) return false;
+
+        Object leftVal = evaluate(parts[0].trim(), recordData, params);
+        Object rightVal = evaluate(parts[1].trim(), recordData, params);
+
+        String leftStr = String.valueOf(leftVal);
+        String rightStr = String.valueOf(rightVal);
+
+        boolean isEqual = leftStr.equals(rightStr);
+        return " == ".equals(operator) ? isEqual : !isEqual;
     }
 
     private Object evaluateArithmetic(String expression, Map<String, Object> recordData, Map<String, Object> params) {

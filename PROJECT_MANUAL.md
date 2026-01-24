@@ -6,6 +6,8 @@
 
 ### 核心功能
 - **规则驱动生成**：通过 YAML 配置文件定义数据生成规则（随机、枚举、引用、表达式等）。
+- **Web API 接口**：提供 RESTful 接口触发数据生成，便于集成测试平台。
+- **多表关联生成**：支持一个生成器同时生成主从表数据（如订单主表+详情表），保持字段一致性。
 - **自动化支持**：支持 CLI 交互模式和 CI/CD 自动化模式。
 - **依赖处理**：自动解决字段间的生成依赖（如 B 字段依赖 A 字段的值）。
 - **引用数据管理**：支持从 Excel 加载参考数据（如客户经理层级、枚举字典、客户信息），并在生成过程中动态引用。
@@ -16,18 +18,20 @@
 ## 2. 项目结构
 
 ### 2.1 核心组件
-*   **`DataGenRunner`**: 程序入口，负责流程控制（交互/自动）、数据生成调度、文件导出和 SQL 执行。
-*   **`GenericDataGenerator`**: 核心生成引擎，解析 YAML 规则，调用各种 Rule Handler 生成数据。
+*   **`DataGenRunner`**: 程序入口，负责流程控制（交互/自动）。
+*   **`DataGenController`**: Web 接口层，处理数据生成请求。
+*   **`GenericDataGenerator`**: 核心生成引擎，解析 YAML 规则，调用各种 Rule Handler 生成数据。支持多模板 SQL 生成。
 *   **`ReferenceDataManager`**: 参考数据管理器，负责加载 Excel 数据并在内存中提供高效查询。
-*   **`ExcelDataLoaderService`**: 负责解析 Excel 文件（POI）。
-*   **`SqlTemplateRepository`**: 管理 SQL 插入模板。
-*   **`JdbcExecutor`**: 封装 JDBC 操作，支持批量插入。
+*   **`ExcelDataLoaderService`**: 负责解析 Excel 文件（POI），支持多 Sheet 页解析。
+*   **`SqlTemplateRepository`**: 管理 SQL 插入模板，支持命名占位符 `{fieldName}`。
+*   **`ExpressionEvaluator`**: 强大的表达式引擎，支持变量替换、算术运算及自定义函数（如 `randomCustMgrInRegion`）。
 
 ### 2.2 目录结构
 ```text
 src/main/java/com/smartdata/smartruledatagen/
 ├── cli/                # 命令行交互层
 ├── config/             # 配置加载 (YAML, DataSource)
+├── controller/         # Web 控制层
 ├── generator/          # 生成逻辑核心 (各种 Rule 实现)
 ├── model/              # 数据模型 (POJO)
 ├── service/            # 业务服务 (Excel加载, SQL模板, 引用数据管理)
@@ -40,85 +44,88 @@ src/main/java/com/smartdata/smartruledatagen/
 
 ### 3.1 环境准备
 1.  **Excel 数据文件**：
-    确保 `src/main/resources` (或 `src/main/resources/data`) 目录下存在以下文件：
-    - `cust_mgr_hierarchy.xlsx`: 客户经理层级数据。
-    - `enum_data.xlsx`: 枚举字典数据。
-    - **`customer_data.xlsx`** (新增): 客户基础信息数据 (路径: `src/main/resources/data/customer_data.xlsx`)。
+    确保 `src/main/resources/data` 目录下存在以下文件：
+    - **`cust_mgr_hierarchy.xlsx`**: 客户经理层级数据。
+        - **结构变更**：支持多 Sheet 页，**Sheet 名称即为 Big Region Code**（如 `004012020`）。
+    - **`customer_data.xlsx`**: 客户基础信息数据。
+        - **结构变更**：支持多 Sheet 页，**Sheet 名称即为 Customer Type**（如 `1`, `2`）。
+        - 包含列：`customer_id`, `customer_name`, `customer_type` (可选), `customer_manage_id`。
+    - **`region_province.xlsx`**: 大区与省份对应关系。
+    - `enum_dictionaries.xlsx`: 枚举字典数据。
 
-2.  **配置文件** (`application.yml`)：
-    配置数据库连接信息和 Excel 文件路径。
+2.  **配置文件** (`application.yml` & `generator-rules.yml`)：
+    配置数据库连接信息和生成规则。
 
 ### 3.2 运行方式
 
-#### 方式一：交互式运行
+#### 方式一：Web API 调用 (推荐)
+启动服务后，访问 `http://localhost:8081`。
+**接口**: `POST /api/datagen/generate`
+**请求体**:
+```json
+{
+    "generatorName": "tradeKpiPayment",
+    "count": 10,
+    "regionCode": "004012020",
+    "executeInsert": false
+}
+```
+**逻辑说明**：
+- 自动校验 `regionCode` 是否在 Excel 中存在（通过 Sheet 页判断）。
+- 对于 `tradeKpiPayment`，会自动筛选 `customer_type=1` 的客户数据。
+- `generatedCount` 返回实际生成的业务记录数（即使底层生成了多条 SQL）。
+
+#### 方式二：CLI 交互
 直接启动项目，根据控制台提示选择生成器并输入数量。
 
-#### 方式二：自动化运行
-使用 `-Dautogen` 参数：
-```bash
-java -Dautogen="1,100,,yes,yes" -jar target/smartRuleDataGen-0.0.1-SNAPSHOT.jar
+---
+
+## 4. 功能特性与配置
+
+### 4.1 多表同时生成
+生成器现在支持定义 `extraSqlTemplateKeys`，允许一次生成操作产出多条关联的 SQL 语句。
+**场景**：生成“交易KPI支付”数据时，同时插入主表 (`..._cust_rt`) 和详情表 (`..._detail_rt`)。
+
+**配置示例** (`generator-rules.yml`)：
+```yaml
+  tradeKpiPayment:
+    sqlTemplateKey: "trade_kpi_payment"
+    extraSqlTemplateKeys: ["trade_kpi_payment_detail"] # 关联的额外模板
+    fields:
+      # 主表字段
+      - name: "zx_payment_amount"
+        type: "RANDOM_DOUBLE"
+        precision: 2 # 保留2位小数
+        # ...
+      # 详情表字段 (与主表字段混合定义，通过 SQL 模板占位符区分)
+      - name: "order_id"
+        type: "EXPRESSION"
+        expression: "generateDetailOrderId()"
 ```
-参数格式：`生成器序号,数量,参数KV,是否导出SQL,是否入库`
+
+**SQL 模板** (`SqlTemplateRepository.java`)：
+使用 `{fieldName}` 命名占位符，实现字段在不同表之间的灵活映射。
+```sql
+INSERT INTO ... VALUES ({payment_date}, {order_id}, {zx_payment_amount})
+```
+
+### 4.2 增强的字段规则
+- **`RANDOM_DOUBLE`**: 支持 `precision` 属性，精确控制小数位数（如金额字段）。
+- **`DATE`**: 支持 `randomOffsetDaysMax: 0`，可限制生成日期不大于基准日期（当前日期）。
+- **`REFERENCE_DATA`**: 增强了对 Excel 数据的查找能力。
+
+### 4.3 表达式引擎函数
+新增了专门用于业务逻辑的函数：
+- `randomCustMgrInRegion(regionCode, fieldName)`: 从指定大区随机获取一个客户经理的属性（用于生成 `signer_id` 等）。
+- `generateDetailOrderId()`: 生成特定格式的订单号。
+
+### 4.4 数据关联逻辑
+- **客户与经理关联**：系统自动加载 `customer_data.xlsx` 中的 `customer_manage_id`，并与 `cust_mgr_hierarchy.xlsx` 中的客户经理建立映射。
+- **区域校验**：接口层直接利用内存中的 Sheet 页索引校验区域代码的有效性。
 
 ---
 
-## 4. 功能拓展：客户数据 Excel 维护与关联
-
-本次更新增加了对客户数据 (`customer_id`, `customer_name`) 的 Excel 维护支持，并实现了基于 `customer_type` 的自动关联逻辑。
-
-### 4.1 新增功能说明
-1.  **Excel 维护**：
-    新建 `src/main/resources/data/customer_data.xlsx`，用于维护客户信息。
-    **Excel 格式要求**（Sheet1）：
-    | 第一列 (ID) | 第二列 (Name) | 第三列 (Type) |
-    | :--- | :--- | :--- |
-    | CUST001 | 杭州阿里巴巴 | 1 |
-    | CUST002 | 北京字节跳动 | 2 |
-    | CUST003 | 深圳腾讯 | 1 |
-
-2.  **自动关联逻辑**：
-    - 程序内部已实现 `CustomerData` 模型及其加载逻辑。
-    - 生成器可以通过配置 `REFERENCE_DATA` 规则，指定筛选特定类型的客户。
-    - **默认绑定规则**：
-        - **生成器 1 & 2** (如 `customerReviewExpire`, `tradeKpiPayment`)：默认筛选 `customer_type = 1` 的客户。
-        - **生成器 3** (如 `tradeKpiPaymentDetail`)：默认筛选 `customer_type = 2` (或 3) 的客户。
-
-### 4.2 配置示例 (`generator-rules.yml`)
-
-#### 场景 A：绑定 Type = 1 的客户（生成器 1 和 2）
-```yaml
-      - name: "customer_id"
-        type: "REFERENCE_DATA"
-        refDataType: "CustomerData"
-        lookupKeyField: "type"
-        lookupValueSource: "1"  # <--- 指定筛选 Type = 1
-        fieldToPopulate: "id"
-      - name: "customer_name"
-        type: "REFERENCE_DATA"
-        refDataType: "CustomerData"
-        lookupKeyField: "id"
-        lookupValueSource: "customer_id" # <--- 依赖生成的 ID
-        fieldToPopulate: "name"
-        dependsOn: "customer_id"
-```
-
-#### 场景 B：绑定 Type = 2 的客户（生成器 3）
-```yaml
-      - name: "customer_id"
-        type: "REFERENCE_DATA"
-        refDataType: "CustomerData"
-        lookupKeyField: "type"
-        lookupValueSource: "2"  # <--- 指定筛选 Type = 2
-        fieldToPopulate: "id"
-```
-
-### 4.3 代码实现细节
-- **`CustomerData.java`**: 新增模型类，包含 id, name, type。
-- **`ExcelDataLoaderService`**: 增加了 `loadCustomerData` 方法解析 Excel。
-- **`ReferenceDataManager`**: 增加了 `customerDataByType` 索引，支持按 Type 快速查找客户列表。
-- **`GenericDataGenerator`**: 扩展了 `REFERENCE_DATA` 处理逻辑，支持 `CustomerData` 的 `type->id` 和 `id->name` 查找模式。
-
----
-
-## 5. 待办事项
-- 请务必创建 `src/main/resources/data/customer_data.xlsx` 文件并填充测试数据，否则生成过程会因找不到客户数据而使用默认值 `CUST_DEFAULT`。
+## 5. 维护指南
+- **新增区域**：只需在 `cust_mgr_hierarchy.xlsx` 中新建一个 Sheet，名称为区域代码，填入该区域的客户经理数据即可。
+- **新增客户类型**：在 `customer_data.xlsx` 中新建 Sheet，名称为类型代码。
+- **调整规则**：修改 `src/main/resources/generator-rules.yml`，无需重新编译代码（部分静态资源需重启生效）。

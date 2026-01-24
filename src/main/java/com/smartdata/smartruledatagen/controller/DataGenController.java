@@ -66,17 +66,27 @@ public class DataGenController {
                 return response;
             }
             
-            // 简单验证地区是否存在 (通过是否有对应的客户经理数据)
-            if (referenceDataManager.getCustMgrsByBigRegion(request.getRegionCode()).isEmpty()) {
+            // 简单验证地区是否存在 (通过是否有对应的客户经理数据/Sheet页)
+            if (!referenceDataManager.hasRegionData(request.getRegionCode())) {
                 response.setSuccess(false);
                 response.setMessage("地区代码不存在或该地区无客户经理数据: " + request.getRegionCode());
                 return response;
             }
 
             List<CustomerData> candidates = referenceDataManager.getCustomersByRegion(request.getRegionCode());
+            log.info("Total candidates for region {}: {}", request.getRegionCode(), candidates.size());
+            
+            // 针对 tradeKpiPayment 生成器，只筛选 type=1 的客户
+            if ("tradeKpiPayment".equals(request.getGeneratorName())) {
+                candidates = candidates.stream()
+                        .filter(c -> "1".equals(c.getCustomerType()))
+                        .collect(Collectors.toList());
+                log.info("Candidates after filtering type=1: {}", candidates.size());
+            }
+
             if (candidates.isEmpty()) {
                 response.setSuccess(false);
-                response.setMessage("该地区下未找到任何客户数据");
+                response.setMessage("该地区下未找到任何客户数据" + ("tradeKpiPayment".equals(request.getGeneratorName()) ? " (Type=1)" : ""));
                 return response;
             }
 
@@ -162,7 +172,9 @@ public class DataGenController {
 
             response.setSuccess(true);
             response.setMessage(message);
-            response.setGeneratedCount(sqls.size());
+            // generatedCount 应该返回生成的“记录数”（主表数据量），即 actualCount
+            // 而不是 sqls.size() (因为现在可能包含详情表等多条SQL)
+            response.setGeneratedCount(actualCount);
             response.setSuccessInsertCount(successInsertCount);
             response.setSqls(sqls);
 

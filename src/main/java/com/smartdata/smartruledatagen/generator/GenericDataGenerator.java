@@ -112,15 +112,50 @@ public class GenericDataGenerator {
 
 
             // 按照SQL模板的占位符顺序准备参数
-            List<Object> argsList = new ArrayList<>();
-            for (FieldRule rule : fieldRules) {
-                if (rule.isIncludeInSql()) {
-                    argsList.add(formattedValues.get(rule.getName()));
+            // 支持两种模式：
+            // 1. 命名占位符 {fieldName} - 推荐，更灵活，支持 extraSqlTemplates
+            // 2. 顺序占位符 %s - 旧模式，依赖 field definition order 和 includeInSql
+            
+            if (template.contains("{") && template.contains("}")) {
+                // 模式 1: 命名替换
+                String sql = template;
+                for (Map.Entry<String, String> entry : formattedValues.entrySet()) {
+                    // 替换 {fieldName} 为 'value' (已经格式化过的)
+                    // 注意：formattedValues 中的值已经包含了引号（如果是字符串）
+                    // 必须使用 replace 而不是 replaceAll (正则)
+                    sql = sql.replace("{" + entry.getKey() + "}", entry.getValue());
+                }
+                sqls.add(sql);
+            } else {
+                // 模式 2: 顺序替换
+                List<Object> argsList = new ArrayList<>();
+                for (FieldRule rule : fieldRules) {
+                    if (rule.isIncludeInSql()) {
+                        argsList.add(formattedValues.get(rule.getName()));
+                    }
+                }
+                Object[] sqlArgs = argsList.toArray();
+                sqls.add(String.format(template, sqlArgs));
+            }
+            
+            // 处理额外的 SQL 模板
+            if (generatorDefinition.getExtraSqlTemplateKeys() != null) {
+                for (String extraTemplateKey : generatorDefinition.getExtraSqlTemplateKeys()) {
+                    String extraTemplate = sqlTemplateRepository.getTemplate(extraTemplateKey);
+                    if (extraTemplate != null) {
+                        // 额外模板强制要求使用命名占位符，因为参数顺序不可知
+                        if (extraTemplate.contains("{") && extraTemplate.contains("}")) {
+                            String extraSql = extraTemplate;
+                            for (Map.Entry<String, String> entry : formattedValues.entrySet()) {
+                                extraSql = extraSql.replace("{" + entry.getKey() + "}", entry.getValue());
+                            }
+                            sqls.add(extraSql);
+                        } else {
+                            log.warn("Extra SQL template '{}' does not use named placeholders ({{}}). Skipping.", extraTemplateKey);
+                        }
+                    }
                 }
             }
-            Object[] sqlArgs = argsList.toArray();
-
-            sqls.add(String.format(template, sqlArgs));
         }
         return sqls;
     }
@@ -133,6 +168,15 @@ public class GenericDataGenerator {
             return staticRule.getValue();
         } else if (rule instanceof RandomIntFieldRule randomIntRule) {
             return ThreadLocalRandom.current().nextInt(randomIntRule.getMin(), randomIntRule.getMax() + 1);
+        } else if (rule instanceof RandomDoubleFieldRule randomDoubleRule) {
+            // 生成 min 到 max 之间的随机浮点数
+            double randomVal = ThreadLocalRandom.current().nextDouble(randomDoubleRule.getMin(), randomDoubleRule.getMax());
+            if (randomDoubleRule.getPrecision() != null) {
+                // 保留指定小数位
+                double scale = Math.pow(10, randomDoubleRule.getPrecision());
+                return Math.round(randomVal * scale) / scale;
+            }
+            return randomVal;
         } else if (rule instanceof UuidFieldRule) {
             return UUID.randomUUID().toString().replace("-", "");
         } else if (rule instanceof DateFieldRule dateRule) {

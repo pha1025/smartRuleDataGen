@@ -8,4 +8,5 @@ import lombok.EqualsAndHashCode;
 public class RandomDoubleFieldRule extends FieldRule {
     private int min;
     private int max;
+    private Integer precision; // 小数位数
 }

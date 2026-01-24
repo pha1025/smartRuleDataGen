@@ -245,6 +245,7 @@ generators:
     tableName: "servyou_ads.ads_trade_kpi_zx_order_payment_cust_rt"
     dbKey: "db1"
     sqlTemplateKey: "trade_kpi_payment"
+    extraSqlTemplateKeys: ["trade_kpi_payment_detail"]
     fields:
       - name: "_cust_mgr_big_region_code" # 隐藏字段，用于依赖计算
         type: "EXPRESSION"
@@ -258,7 +259,7 @@ generators:
         format: "yyyy-MM-dd"
         baseDateSource: "PARAM"
         randomOffsetDaysMin: -5
-        randomOffsetDaysMax: 5
+        randomOffsetDaysMax: 0
         nullable: false
       - name: "outlet_code"
         type: "EXPRESSION"
@@ -325,14 +326,15 @@ generators:
         expression: "cust_mgr_outlet_name"
         nullable: false
       - name: "zx_payment_amount"
-        type: "RANDOM_INT"
-        sqlType: "INT"
+        type: "RANDOM_DOUBLE"
+        sqlType: "DECIMAL"
         min: 100
         max: 5000
+        precision: 2
         nullable: false
       - name: "zx_group_payment_amount"
         type: "CONDITIONAL"
-        sqlType: "INT"
+        sqlType: "DECIMAL"
         nullable: true
         conditions:
           - ifExpression: "_cust_mgr_big_region_code == '004012022'"
@@ -373,6 +375,72 @@ generators:
         sqlType: "VARCHAR"
         expression: "cust_mgr_big_region_name"
         nullable: false
+      # 以下为 Detail 表独有字段，但由于使用命名占位符，可以混在一起定义
+      - name: "order_id"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "generateDetailOrderId()"
+        nullable: false
+      - name: "customer_id"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "customer_id" # 从预定义记录中获取
+        nullable: false
+      - name: "customer_name"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "customer_name" # 从预定义记录中获取
+        nullable: false
+      - name: "customer_type"
+        type: "STATIC"
+        sqlType: "VARCHAR"
+        value: "1"
+        nullable: false
+      - name: "signer_id"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "randomCustMgrInRegion(_cust_mgr_big_region_code, 'custMgrId')"
+        nullable: false
+      - name: "signer_name"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "lookupCustMgrField(signer_id, 'custMgrName')"
+        nullable: false
+      - name: "income_khjl_id_detail"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "randomCustMgrInRegion(_cust_mgr_big_region_code, 'custMgrId')"
+        nullable: false
+      - name: "income_khjl_name_detail"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "lookupCustMgrField(income_khjl_id_detail, 'custMgrName')"
+        nullable: false
+      - name: "payment_amount"
+        type: "EXPRESSION"
+        sqlType: "DECIMAL"
+        expression: "zx_payment_amount" # 复用主表的金额
+        nullable: false
+      - name: "assessment_amount"
+        type: "STATIC"
+        sqlType: "INT"
+        value: "0"
+        nullable: false
+      - name: "order_source"
+        type: "LIST_RANDOM"
+        sqlType: "VARCHAR"
+        values: ["old", "new"]
+        nullable: false
+      - name: "payment_method_name"
+        type: "LIST_RANDOM"
+        sqlType: "VARCHAR"
+        values: ["在线支付", "线下支付"]
+        nullable: false
+      - name: "order_type"
+        type: "LIST_RANDOM"
+        sqlType: "VARCHAR"
+        values: ["新商务订单", "内管订单", "退货单"]
+        nullable: false
 
   tradeKpiPaymentDetail:
     tableName: "servyou_ads.ads_trade_kpi_zx_order_payment_detail_rt"
@@ -385,7 +453,7 @@ generators:
         format: "yyyy-MM-dd"
         baseDateSource: "PARAM"
         randomOffsetDaysMin: -5
-        randomOffsetDaysMax: 5
+        randomOffsetDaysMax: 0
         nullable: false
       - name: "customer_id"
         type: "REFERENCE_DATA"

@@ -12,18 +12,19 @@ public class SqlTemplateRepository {
 
     public SqlTemplateRepository() {
         // 例1: ads_trade_kpi_zx_order_payment_cust_rt 模板
+        // 使用命名占位符 {fieldName} 以支持更灵活的字段映射
         templates.put("trade_kpi_payment",
                 "INSERT INTO servyou_ads.ads_trade_kpi_zx_order_payment_cust_rt\n" +
                         "(payment_date, outlet_code, outlet_name, income_type, trade_type, cust_mgr_id, cust_mgr_name, cust_mgr_outlet_code, cust_mgr_outlet_name, income_khjl_id, income_khjl_name, income_khjl_outlet_code, income_khjl_outlet_name, zx_payment_amount, zx_group_payment_amount, group_id, group_name, zx_assessment_payment_amount, cust_mgr_big_region_code, cust_mgr_big_region_name, income_khjl_big_region_code, income_khjl_big_region_name)\n" +
                         "VALUES\n" +
-                        "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)");
+                        "({payment_date}, {outlet_code}, {outlet_name}, {income_type}, {trade_type}, {cust_mgr_id}, {cust_mgr_name}, {cust_mgr_outlet_code}, {cust_mgr_outlet_name}, {income_khjl_id}, {income_khjl_name}, {income_khjl_outlet_code}, {income_khjl_outlet_name}, {zx_payment_amount}, {zx_group_payment_amount}, {group_id}, {group_name}, {zx_assessment_payment_amount}, {cust_mgr_big_region_code}, {cust_mgr_big_region_name}, {income_khjl_big_region_code}, {income_khjl_big_region_name})");
 
         // 例3: ads_trade_kpi_zx_order_payment_detail_rt 模板 (Generator 3)
         templates.put("trade_kpi_payment_detail",
                 "INSERT INTO servyou_ads.ads_trade_kpi_zx_order_payment_detail_rt\n" +
-                        "(payment_date, customer_id, customer_name, zx_payment_amount)\n" +
+                        "(payment_date, order_id, customer_id, customer_name, customer_type, income_type, trade_type, outlet_code, outlet_name, cust_mgr_id, cust_mgr_name, signer_id, signer_name, income_khjl_id, income_khjl_name, income_khjl_outlet_code, income_khjl_outlet_name, payment_amount, assessment_amount, order_source, payment_method_name, order_type)\n" +
                         "VALUES\n" +
-                        "(%s, %s, %s, %s)");
+                        "({payment_date}, {order_id}, {customer_id}, {customer_name}, {customer_type}, {income_type}, {trade_type}, {outlet_code}, {outlet_name}, {cust_mgr_id}, {cust_mgr_name}, {signer_id}, {signer_name}, {income_khjl_id_detail}, {income_khjl_name_detail}, {income_khjl_outlet_code}, {income_khjl_outlet_name}, {payment_amount}, {assessment_amount}, {order_source}, {payment_method_name}, {order_type})");
 
         // 例4: ads_trade_kpi_cs_order_payment_rt 模板 (Generator 4)
         templates.put("cs_order_payment",

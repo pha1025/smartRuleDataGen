@@ -53,6 +53,9 @@ public class ReferenceDataManager {
 
     // 存储省份数据
     private Map<String, String> provinceCodeByBigRegion;
+    
+    // 存储存在的大区代码（即存在的Sheet名）
+    private Set<String> availableRegionCodes;
 
     // TODO: 如果 group_id 有独立的Excel，需要在这里加载
     // private Map<String, String> groupIdLookup; // cust_mgr_id -> group_id
@@ -69,7 +72,11 @@ public class ReferenceDataManager {
                 .collect(Collectors.groupingBy(CustMgrData::getCustMgrBigRegionCode));
         this.custMgrDataById = loadedCustMgrs.stream()
                 .collect(Collectors.toMap(CustMgrData::getCustMgrId, data -> data, (oldValue, newValue) -> newValue, ConcurrentHashMap::new));
-        log.info("Loaded {} customer manager records.", loadedCustMgrs.size());
+        
+        // 初始化可用的 region codes
+        this.availableRegionCodes = this.custMgrDataByBigRegion.keySet();
+        
+        log.info("Loaded {} customer manager records. Available Regions: {}", loadedCustMgrs.size(), availableRegionCodes);
 
 
         log.info("Loading reference data: Enum Dictionaries from {}", enumDataPath);
@@ -87,7 +94,12 @@ public class ReferenceDataManager {
         this.customerDataByManageId = loadedCustomers.stream()
                 .filter(c -> c.getCustomerManageId() != null)
                 .collect(Collectors.groupingBy(CustomerData::getCustomerManageId));
-        log.info("Loaded {} customer records.", loadedCustomers.size());
+        log.info("Loaded {} customer records. Grouped by ManageID size: {}", loadedCustomers.size(), customerDataByManageId.size());
+        
+        // Print all loaded manage IDs for debugging
+        if (log.isDebugEnabled()) {
+            log.debug("Loaded Manage IDs: {}", customerDataByManageId.keySet());
+        }
 
         log.info("Loading reference data: Region Province Data from {}", regionProvinceDataPath);
         List<RegionProvinceData> loadedRegionProvinces = excelDataLoaderService.loadRegionProvinceData(regionProvinceDataPath);
@@ -102,6 +114,10 @@ public class ReferenceDataManager {
                     .collect(Collectors.toMap(RegionProvinceData::getBigRegionCode, RegionProvinceData::getProvinceCityAreaCode, (v1, v2) -> v1));
         }
         log.info("Loaded {} region province records.", this.provinceCodeByBigRegion.size());
+    }
+
+    public boolean hasRegionData(String regionCode) {
+        return availableRegionCodes != null && availableRegionCodes.contains(regionCode);
     }
 
     public List<CustMgrData> getCustMgrsByBigRegion(String bigRegionCode) {
@@ -142,17 +158,25 @@ public class ReferenceDataManager {
 
     public List<CustomerData> getCustomersByRegion(String regionCode) {
         if (!custMgrDataByBigRegion.containsKey(regionCode)) {
+            log.warn("Region code {} not found in custMgrDataByBigRegion", regionCode);
             return new ArrayList<>();
         }
         List<CustMgrData> mgrs = custMgrDataByBigRegion.get(regionCode);
         Set<String> mgrIds = mgrs.stream().map(CustMgrData::getCustMgrId).collect(Collectors.toSet());
+        
+        log.info("Found {} managers for region {}: {}", mgrIds.size(), regionCode, mgrIds);
 
         List<CustomerData> result = new ArrayList<>();
         for (String mgrId : mgrIds) {
             if (customerDataByManageId.containsKey(mgrId)) {
-                result.addAll(customerDataByManageId.get(mgrId));
+                List<CustomerData> customers = customerDataByManageId.get(mgrId);
+                log.info("Manager {} has {} customers", mgrId, customers.size());
+                result.addAll(customers);
+            } else {
+                log.info("Manager {} has no customers in customerDataByManageId", mgrId);
             }
         }
+        log.info("Total customers found for region {}: {}", regionCode, result.size());
         return result;
     }
 
