@@ -8,4 +8,6 @@ public class CustomerData {
     private String customerName;
     private String customerType; // 1, 2, 3
     private String customerManageId; // 关联的客户经理ID
+    private String servyouNum;
+    private String saleAreaId;
 }

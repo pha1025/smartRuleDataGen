@@ -40,6 +40,13 @@ public class SqlTemplateRepository {
                         "lastest_follow_time, follow_type, follow_type_name, follow_progress, follow_progress_name, follow_intention, follow_intention_name, lastest_payment_method_name, lastest_payment_time, lastest_order_time, renew_type, renew_type_code, cust_mgr_id, cust_mgr_name, province_city_area_code, big_region_code,is_order)\n" +
                         "VALUES\n" +
                         "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)");
+
+        // 例5: cs_board_auth_monthly 模板
+        templates.put("cs_board_auth_monthly",
+                "INSERT INTO cctest_not_delete.ads_cs_board_authorization_monthly " +
+                        "(true_id, `month`, agent_id, agent_name, sale_area_id, agent_user_code, num) " +
+                        "VALUES " +
+                        "({true_id}, {month}, {agent_id}, {agent_name}, {sale_area_id}, {agent_user_code}, {num})");
     }
 
     public String getTemplate(String key) {

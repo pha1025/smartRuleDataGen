@@ -154,8 +154,9 @@ public class ExcelDataLoaderService {
                     } else {
                         data.setCustomerType(sheetName);
                     }
-                    
-                    data.setCustomerManageId(getCellValue(row.getCell(3)));
+                    data.setServyouNum(getCellValue(row.getCell(3)));
+                    data.setSaleAreaId(getCellValue(row.getCell(4)));
+                    data.setCustomerManageId(getCellValue(row.getCell(5)));
 
                     dataList.add(data);
                 }

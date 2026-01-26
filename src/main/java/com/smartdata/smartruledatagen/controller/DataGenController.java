@@ -83,6 +83,12 @@ public class DataGenController {
                         .collect(Collectors.toList());
                 log.info("Candidates after filtering type=1: {}", candidates.size());
             }
+            // 针对 csBoardAuthMonthly 生成器，只筛选 type=2/3 的客户
+            if ("csBoardAuthMonthly".equals(request.getGeneratorName())) {
+                candidates = candidates.stream()
+                        .filter(c -> "2".equals(c.getCustomerType()) || "3".equals(c.getCustomerType()))
+                        .collect(Collectors.toList());
+            }
 
             if (candidates.isEmpty()) {
                 response.setSuccess(false);
@@ -139,8 +145,14 @@ public class DataGenController {
                 if (customer.getCustomerManageId() != null) {
                     record.put("customer_manage_id", customer.getCustomerManageId());
                 }
-                
-                preDefinedRecords.add(record);
+                if (customer.getServyouNum() != null) {
+                    record.put("servyou_num", customer.getServyouNum());
+                }
+                if (customer.getSaleAreaId() != null) {
+                    record.put("sale_area_id", customer.getSaleAreaId());
+                }
+
+                    preDefinedRecords.add(record);
             }
 
             // 6. 生成 SQL

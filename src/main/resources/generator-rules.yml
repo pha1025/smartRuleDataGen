@@ -442,43 +442,43 @@ generators:
         values: ["新商务订单", "内管订单", "退货单"]
         nullable: false
 
-  tradeKpiPaymentDetail:
-    tableName: "servyou_ads.ads_trade_kpi_zx_order_payment_detail_rt"
-    dbKey: "db1"
-    sqlTemplateKey: "trade_kpi_payment_detail"
-    fields:
-      - name: "payment_date"
-        type: "DATE"
-        sqlType: "DATE"
-        format: "yyyy-MM-dd"
-        baseDateSource: "PARAM"
-        randomOffsetDaysMin: -5
-        randomOffsetDaysMax: 0
-        nullable: false
-      - name: "customer_id"
-        type: "REFERENCE_DATA"
-        sqlType: "VARCHAR"
-        refDataType: "CustomerData"
-        lookupKeyField: "type"
-        lookupValueSource: "2" # Default to Type 2 (or 3 via some logic, here hardcoded 2 as default example)
-        fieldToPopulate: "id"
-        defaultNotFoundValue: "CUST_DEFAULT"
-        nullable: false
-      - name: "customer_name"
-        type: "REFERENCE_DATA"
-        sqlType: "VARCHAR"
-        refDataType: "CustomerData"
-        lookupKeyField: "id"
-        lookupValueSource: "customer_id"
-        fieldToPopulate: "name"
-        dependsOn: "customer_id"
-        nullable: false
-      - name: "zx_payment_amount"
-        type: "RANDOM_INT"
-        sqlType: "INT"
-        min: 100
-        max: 5000
-        nullable: false
+#  tradeKpiPaymentDetail:
+#    tableName: "servyou_ads.ads_trade_kpi_zx_order_payment_detail_rt"
+#    dbKey: "db1"
+#    sqlTemplateKey: "trade_kpi_payment_detail"
+#    fields:
+#      - name: "payment_date"
+#        type: "DATE"
+#        sqlType: "DATE"
+#        format: "yyyy-MM-dd"
+#        baseDateSource: "PARAM"
+#        randomOffsetDaysMin: -5
+#        randomOffsetDaysMax: 0
+#        nullable: false
+#      - name: "customer_id"
+#        type: "REFERENCE_DATA"
+#        sqlType: "VARCHAR"
+#        refDataType: "CustomerData"
+#        lookupKeyField: "type"
+#        lookupValueSource: "2" # Default to Type 2 (or 3 via some logic, here hardcoded 2 as default example)
+#        fieldToPopulate: "id"
+#        defaultNotFoundValue: "CUST_DEFAULT"
+#        nullable: false
+#      - name: "customer_name"
+#        type: "REFERENCE_DATA"
+#        sqlType: "VARCHAR"
+#        refDataType: "CustomerData"
+#        lookupKeyField: "id"
+#        lookupValueSource: "customer_id"
+#        fieldToPopulate: "name"
+#        dependsOn: "customer_id"
+#        nullable: false
+#      - name: "zx_payment_amount"
+#        type: "RANDOM_INT"
+#        sqlType: "INT"
+#        min: 100
+#        max: 5000
+#        nullable: false
 
   csOrderPayment:
     tableName: "cctest_not_delete.ads_trade_kpi_cs_order_payment_rt"
@@ -664,4 +664,49 @@ generators:
         category: "order_type"
         lookupBy: "NAME"
         targetField: "CODE"
+        nullable: false
+
+  csBoardAuthMonthly:
+    tableName: "cctest_not_delete.ads_cs_board_authorization_monthly"
+    dbKey: "db2" # 注意：需确认 application.yml 中配置了 db2 数据源
+    sqlTemplateKey: "cs_board_auth_monthly"
+    fields:
+      - name: "true_id"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "customer_manage_id" # 直接引用预置的客户经理ID
+        nullable: false
+      - name: "month"
+        type: "DATE"
+        sqlType: "VARCHAR" # SQL中可能是字符串格式
+        format: "yyyy-MM"
+        baseDateSource: "PARAM"
+        randomOffsetDaysMin: 0
+        randomOffsetDaysMax: 0 # 锁定为当月
+        nullable: false
+      - name: "agent_id"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "customer_id" # 引用预置的客户ID
+        nullable: false
+      - name: "agent_name"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "customer_name" # 引用预置的客户名称
+        nullable: false
+      - name: "sale_area_id"
+        type: "EXPRESSION"
+        sqlType: "INT" # 假设是数字
+        expression: "sale_area_id" # 引用 CustomerData 中的新字段
+        nullable: true
+      - name: "agent_user_code"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        expression: "servyou_num" # 引用 CustomerData 中的新字段
+        nullable: true
+      - name: "num"
+        type: "RANDOM_INT"
+        sqlType: "INT"
+        min: 0
+        max: 100
         nullable: false
