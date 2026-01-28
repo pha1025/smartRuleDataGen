@@ -11,6 +11,13 @@ public class ValueFormatter {
             return nullable ? "NULL" : "''"; // 如果允许NULL则返回"NULL"，否则返回空字符串
         }
 
+        if (sqlType == null) {
+            // 如果未指定类型，尝试根据对象类型推断或默认按字符串处理
+            if (value instanceof Number) return value.toString();
+            if (value instanceof Boolean) return (Boolean) value ? "1" : "0";
+            return "'" + value.toString().replace("'", "''") + "'";
+        }
+
         switch (sqlType.toUpperCase()) {
             case "VARCHAR":
             case "TEXT":

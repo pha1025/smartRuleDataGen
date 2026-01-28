@@ -8,6 +8,6 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class ConditionalFieldRule extends FieldRule {
-    private List<Condition> conditions; // 条件列表{
+    private List<Condition> conditions; // 条件列表
 }
 

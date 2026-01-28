@@ -143,20 +143,21 @@ public class ExcelDataLoaderService {
                     }
 
                     CustomerData data = new CustomerData();
-                    // Assumed columns: 0: customer_id, 1: customer_name, 2: customer_type, 3: customer_manage_id
+                    // 0: customer_id, 1: customer_name, 2: customer_type, 3: servyou_num, 4: sale_area_id, 5: customer_manage_id, 6: province_city_area_code
                     data.setCustomerId(getCellValue(row.getCell(0)));
                     data.setCustomerName(getCellValue(row.getCell(1)));
+                    data.setProvinceCityAreaCode(getCellValue(row.getCell(2)));
                     
-                    // 优先使用 Sheet 名作为 Type，如果单元格里有值且不为空，也可以使用（或者校验）
-                    String typeInCell = getCellValue(row.getCell(2));
+                    // 优先使用 Sheet 名作为 Type
+                    String typeInCell = getCellValue(row.getCell(3));
                     if (typeInCell != null && !typeInCell.isEmpty()) {
                         data.setCustomerType(typeInCell);
                     } else {
                         data.setCustomerType(sheetName);
                     }
-                    data.setServyouNum(getCellValue(row.getCell(3)));
-                    data.setSaleAreaId(getCellValue(row.getCell(4)));
-                    data.setCustomerManageId(getCellValue(row.getCell(5)));
+                    data.setServyouNum(getCellValue(row.getCell(4)));
+                    data.setSaleAreaId(getCellValue(row.getCell(5)));
+                    data.setCustomerManageId(getCellValue(row.getCell(6)));
 
                     dataList.add(data);
                 }

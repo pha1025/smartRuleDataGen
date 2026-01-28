@@ -75,7 +75,9 @@ public class GenericDataGenerator {
                         Object value = currentRecordData.get(rule.getName());
                         // 特殊处理：如果预置的是 _temp_cust_type 这种中间变量，它不需要 includeInSql，但需要放入 formattedValues (虽然可能不用)
                         // 主要是如果是 includeInSql=true 的字段，必须放入 formattedValues
-                        formattedValues.put(rule.getName(), ValueFormatter.formatForSql(value, rule.getSqlType(), rule.isNullable()));
+                        if (rule.isIncludeInSql()) {
+                            formattedValues.put(rule.getName(), ValueFormatter.formatForSql(value, rule.getSqlType(), rule.isNullable()));
+                        }
                         populatedFields.add(rule.getName());
                         continue;
                     }
@@ -83,7 +85,9 @@ public class GenericDataGenerator {
                     try {
                         Object value = generateFieldValue(rule, currentRecordData, params);
                         currentRecordData.put(rule.getName(), value);
-                        formattedValues.put(rule.getName(), ValueFormatter.formatForSql(value, rule.getSqlType(), rule.isNullable()));
+                        if (rule.isIncludeInSql()) {
+                            formattedValues.put(rule.getName(), ValueFormatter.formatForSql(value, rule.getSqlType(), rule.isNullable()));
+                        }
                         populatedFields.add(rule.getName());
                     } catch (DependencyNotMetException e) {
                         // 依赖未满足，跳过当前字段，在下一轮尝试
@@ -92,7 +96,9 @@ public class GenericDataGenerator {
                         log.error("Error generating value for field {}: {}", rule.getName(), e.getMessage());
                         // 对于无法生成的值，暂时用 NULL 或默认空值填充，以避免中断整个生成
                         currentRecordData.put(rule.getName(), null);
-                        formattedValues.put(rule.getName(), ValueFormatter.formatForSql(null, rule.getSqlType(), rule.isNullable()));
+                        if (rule.isIncludeInSql()) {
+                            formattedValues.put(rule.getName(), ValueFormatter.formatForSql(null, rule.getSqlType(), rule.isNullable()));
+                        }
                         populatedFields.add(rule.getName()); // 标记为已处理，防止无限重试
                     }
                 }
@@ -105,7 +111,9 @@ public class GenericDataGenerator {
                 for (FieldRule rule : fieldRules) {
                     if (!populatedFields.contains(rule.getName())) {
                         currentRecordData.put(rule.getName(), null);
-                        formattedValues.put(rule.getName(), ValueFormatter.formatForSql(null, rule.getSqlType(), rule.isNullable()));
+                        if (rule.isIncludeInSql()) {
+                            formattedValues.put(rule.getName(), ValueFormatter.formatForSql(null, rule.getSqlType(), rule.isNullable()));
+                        }
                     }
                 }
             }
@@ -180,7 +188,11 @@ public class GenericDataGenerator {
         } else if (rule instanceof UuidFieldRule) {
             return UUID.randomUUID().toString().replace("-", "");
         } else if (rule instanceof DateFieldRule dateRule) {
-            return generateDateValue(dateRule, params);
+            LocalDate date = generateDateValue(dateRule, params);
+            if (dateRule.getFormat() != null && !dateRule.getFormat().isEmpty()) {
+                return date.format(java.time.format.DateTimeFormatter.ofPattern(dateRule.getFormat()));
+            }
+            return date;
         } else if (rule instanceof EnumLookupFieldRule enumLookupRule) {
             return generateEnumLookupValue(enumLookupRule, recordData);
         } else if (rule instanceof ListRandomFieldRule listRandomRule) {

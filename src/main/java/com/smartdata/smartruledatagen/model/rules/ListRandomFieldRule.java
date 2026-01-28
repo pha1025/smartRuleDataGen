@@ -8,5 +8,5 @@ import java.util.List;
 @Data
 @EqualsAndHashCode(callSuper = true)
 public class ListRandomFieldRule extends FieldRule {
-    private List<String> values; // 可选值列表{
+    private List<String> values; // 可选值列表
 }

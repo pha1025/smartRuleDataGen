@@ -110,6 +110,28 @@ public class ExpressionEvaluator {
                         int dayOfMonth = now.getDayOfMonth();
                         int randomDay = ThreadLocalRandom.current().nextInt(1, dayOfMonth + 1);
                         return now.withDayOfMonth(randomDay);
+                    case "randomDateTimeBeforeNow":
+                        // Args: format (optional), maxDaysBack (optional)
+                        int maxDays = 365;
+                        if (args.length >= 2 && !args[1].isEmpty()) {
+                            maxDays = ((Number) evaluate(args[1], recordData, params)).intValue();
+                        }
+                        int daysBack = ThreadLocalRandom.current().nextInt(0, maxDays + 1);
+                        int hours = ThreadLocalRandom.current().nextInt(0, 24);
+                        int minutes = ThreadLocalRandom.current().nextInt(0, 60);
+                        int seconds = ThreadLocalRandom.current().nextInt(0, 60);
+                        
+                        java.time.LocalDateTime randomDateTime = java.time.LocalDateTime.now()
+                                .minusDays(daysBack)
+                                .withHour(hours)
+                                .withMinute(minutes)
+                                .withSecond(seconds);
+                                
+                        if (args.length >= 1 && !args[0].isEmpty()) {
+                            String format = (String) evaluate(args[0], recordData, params);
+                            return randomDateTime.format(java.time.format.DateTimeFormatter.ofPattern(format));
+                        }
+                        return randomDateTime;
                     case "getCurrentMonth":
                          // 支持可选参数：offset (months)
                          int offset = 0;
@@ -120,6 +142,25 @@ public class ExpressionEvaluator {
                              }
                          }
                          return DateUtil.formatMonth(LocalDate.now().plusMonths(offset));
+                    case "randomMonth":
+                        if (args.length == 2) {
+                            int min = ((Number) evaluate(args[0], recordData, params)).intValue();
+                            int max = ((Number) evaluate(args[1], recordData, params)).intValue();
+                            int monthOffset = ThreadLocalRandom.current().nextInt(min, max + 1);
+                            return DateUtil.formatMonth(LocalDate.now().plusMonths(monthOffset));
+                        }
+                        return null;
+                    case "randomDateInMonth":
+                        if (args.length == 1) {
+                            Object monthObj = evaluate(args[0], recordData, params);
+                            if (monthObj instanceof String monthStr) {
+                                // 格式 yyyy-MM
+                                java.time.YearMonth ym = java.time.YearMonth.parse(monthStr, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"));
+                                int day = ThreadLocalRandom.current().nextInt(1, ym.lengthOfMonth() + 1);
+                                return ym.atDay(day);
+                            }
+                        }
+                        return null;
                     case "randomCustMgrInRegion":
                         // Args: regionCode, fieldName
                         if (args.length == 2) {
@@ -180,6 +221,14 @@ public class ExpressionEvaluator {
                             String category = (String) evaluate(args[0], recordData, params);
                             Object valueToLookup = evaluate(args[1], recordData, params);
                             if (valueToLookup instanceof String lookupValue) {
+                                if ("RANDOM".equalsIgnoreCase(lookupValue)) {
+                                    List<com.smartdata.smartruledatagen.model.EnumMapping> mappings = referenceDataManager.getEnumMappings(category);
+                                    if (mappings != null && !mappings.isEmpty()) {
+                                        com.smartdata.smartruledatagen.model.EnumMapping selected = mappings.get(random.nextInt(mappings.size()));
+                                        return "lookupEnumCode".equals(funcName) ? selected.getCode() : selected.getName();
+                                    }
+                                    return null;
+                                }
                                 if ("lookupEnumCode".equals(funcName)) {
                                     return referenceDataManager.getEnumByName(category, lookupValue)
                                             .map(e -> e.getCode())

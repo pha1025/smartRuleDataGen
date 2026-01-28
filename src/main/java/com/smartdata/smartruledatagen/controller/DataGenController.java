@@ -151,6 +151,9 @@ public class DataGenController {
                 if (customer.getSaleAreaId() != null) {
                     record.put("sale_area_id", customer.getSaleAreaId());
                 }
+                if (customer.getProvinceCityAreaCode() != null) {
+                    record.put("province_city_area_code", customer.getProvinceCityAreaCode());
+                }
 
                     preDefinedRecords.add(record);
             }

@@ -36,10 +36,11 @@ public class SqlTemplateRepository {
         // 例2: ads_itcrm_customer_review_zx_product_expire 模板
         templates.put("customer_review_expire",
                 "INSERT INTO cctest_not_delete.ads_itcrm_customer_review_zx_product_expire\n" +
-                        "(end_date_month, end_date, customer_id, customer_name, outlet_code, expect_renew_type_code, expect_renew_type, is_renew_code, is_renew, cur_package_paid_amount, real_package_sales_amt, renew_package_sales_amount, package_level,action_names, renew_package_level, avg_applicants_num, in_invoice_avg_amt, out_invoice_avg_amt, is_compliance_tax_target, active_compliance_status,\n" +
-                        "lastest_follow_time, follow_type, follow_type_name, follow_progress, follow_progress_name, follow_intention, follow_intention_name, lastest_payment_method_name, lastest_payment_time, lastest_order_time, renew_type, renew_type_code, cust_mgr_id, cust_mgr_name, province_city_area_code, big_region_code,is_order)\n" +
+                        "(end_date_month, end_date, customer_id, customer_name, outlet_code, expect_renew_type_code, expect_renew_type, is_renew_code, is_renew, cur_package_paid_amount, cur_package_sales_amount, real_package_sales_amt, renew_package_sales_amount, package_level, action_names, renew_package_level, avg_applicants_num, in_invoice_avg_amt, out_invoice_avg_amt, is_compliance_tax_target, active_compliance_status,\n" +
+                        "lastest_follow_time, follow_type, follow_type_name, follow_progress, follow_progress_name, follow_intention, follow_intention_name, lastest_payment_method, lastest_payment_method_name, lastest_payment_time, lastest_order_time, renew_type, renew_type_code, cust_mgr_id, cust_mgr_name, province_city_area_code, big_region_code, is_order)\n" +
                         "VALUES\n" +
-                        "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)");
+                        "({end_date_month}, {end_date}, {customer_id}, {customer_name}, {outlet_code}, {expect_renew_type_code}, {expect_renew_type}, {is_renew_code}, {is_renew}, {cur_package_paid_amount}, {cur_package_sales_amount}, {real_package_sales_amt}, {renew_package_sales_amount}, {package_level}, {action_names}, {renew_package_level}, {avg_applicants_num}, {in_invoice_avg_amt}, {out_invoice_avg_amt}, {is_compliance_tax_target}, {active_compliance_status},\n" +
+                        "{lastest_follow_time}, {follow_type}, {follow_type_name}, {follow_progress}, {follow_progress_name}, {follow_intention}, {follow_intention_name}, {lastest_payment_method}, {lastest_payment_method_name}, {lastest_payment_time}, {lastest_order_time}, {renew_type}, {renew_type_code}, {cust_mgr_id}, {cust_mgr_name}, {province_city_area_code}, {big_region_code}, {is_order})");
 
         // 例5: cs_board_auth_monthly 模板
         templates.put("cs_board_auth_monthly",

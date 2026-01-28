@@ -30,4 +30,5 @@ public abstract class FieldRule {
     protected String sqlType; // 字段在SQL中的类型，用于格式化 (e.g., "VARCHAR", "INT", "DATE")
     protected boolean nullable = false; // 是否允许为 NULL
     protected boolean includeInSql = true; // 是否包含在生成的 SQL 语句中（默认为 true）
+    protected String dependsOn; // 依赖的字段名
 }

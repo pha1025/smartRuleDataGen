@@ -8,45 +8,46 @@ generators:
       - name: "end_date_month"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
-        expression: "formatMonth(end_date)"
+        expression: "randomMonth(-1, 3)" # 可在此定义前后N个月，例如 -3, 3 表示前后3个月
         nullable: false
       - name: "end_date"
         type: "EXPRESSION"
-        sqlType: "DATE" # 保持DATE，以便后续处理
-        expression: "randomDateInCurrentMonth()"
+        sqlType: "DATE"
+        expression: "randomDateInMonth(end_date_month)"
+        dependsOn: "end_date_month"
         nullable: false
       - name: "customer_id"
         type: "REFERENCE_DATA"
         sqlType: "VARCHAR"
         refDataType: "CustomerData"
         lookupKeyField: "type"
-        lookupValueSource: "1" # Default to Type 1
+        lookupValueSource: "1"
         fieldToPopulate: "id"
-        defaultNotFoundValue: "CUST_DEFAULT"
         nullable: false
       - name: "customer_name"
-        type: "REFERENCE_DATA"
+        type: "EXPRESSION"
         sqlType: "VARCHAR"
-        refDataType: "CustomerData"
-        lookupKeyField: "id"
-        lookupValueSource: "customer_id"
-        fieldToPopulate: "name"
-        dependsOn: "customer_id"
-        nullable: false
-      - name: "customer_manage_id" # 这是一个隐藏字段，用于关联，不一定输出到SQL（如果SQL模板没用它）
-        type: "REFERENCE_DATA"
-        sqlType: "VARCHAR"
-        includeInSql: false
-        refDataType: "CustomerData"
-        lookupKeyField: "id"
-        lookupValueSource: "customer_id"
-        fieldToPopulate: "manageId"
-        dependsOn: "customer_id"
+        expression: "customer_name" # From pre-filled
         nullable: false
       - name: "outlet_code"
         type: "STATIC"
         sqlType: "VARCHAR"
         value: "004012020002"
+        nullable: false
+      - name: "renew_type_code"
+        type: "ENUM_LOOKUP"
+        sqlType: "VARCHAR"
+        category: "renew_type"
+        lookupBy: "NAME"
+        targetField: "CODE"
+        nullable: false
+      - name: "renew_type"
+        type: "ENUM_LOOKUP"
+        sqlType: "VARCHAR"
+        category: "renew_type"
+        lookupBy: "CODE"
+        targetField: "NAME"
+        dependsOn: "renew_type_code"
         nullable: false
       - name: "expect_renew_type_code"
         type: "ENUM_LOOKUP"
@@ -64,45 +65,47 @@ generators:
         dependsOn: "expect_renew_type_code"
         nullable: false
       - name: "is_renew_code"
-        type: "ENUM_LOOKUP"
+        type: "CONDITIONAL"
         sqlType: "VARCHAR"
-        category: "is_renew"
-        lookupBy: "NAME"
-        targetField: "CODE"
+        dependsOn: "renew_type_code"
+        conditions:
+          - ifExpression: "renew_type_code != 'unRenewed'"
+            thenValue: "'Y'"
+          - elseValue: "'N'"
         nullable: false
       - name: "is_renew"
-        type: "ENUM_LOOKUP"
+        type: "CONDITIONAL"
         sqlType: "VARCHAR"
-        category: "is_renew"
-        lookupBy: "CODE"
-        targetField: "NAME"
         dependsOn: "is_renew_code"
+        conditions:
+          - ifExpression: "is_renew_code == 'Y'"
+            thenValue: "'已续费'"
+          - elseValue: "'未续费'"
         nullable: false
       - name: "cur_package_paid_amount"
-        type: "RANDOM_INT"
-        sqlType: "INT"
+        type: "RANDOM_DOUBLE"
+        sqlType: "DECIMAL"
         min: 500
         max: 5000
+        precision: 2
         nullable: false
       - name: "cur_package_sales_amount" # 新增字段
         type: "EXPRESSION"
-        sqlType: "INT"
+        sqlType: "DECIMAL"
         expression: "cur_package_paid_amount + randomInt(0, 100)"
         nullable: false
       - name: "real_package_sales_amt"
         type: "EXPRESSION"
-        sqlType: "INT"
-        expression: "cur_package_paid_amount" # 简化，避免负数风险，或者 paid + small_diff
+        sqlType: "DECIMAL"
+        expression: "cur_package_paid_amount + randomInt(0, 100)"
+        dependsOn: "cur_package_paid_amount"
         nullable: false
       - name: "renew_package_sales_amount"
-        type: "EXPRESSION"
-        sqlType: "INT"
-        expression: "randomInt(500, 6000)"
-        nullable: false
-      - name: "renew_package_paid_amount" # 假设需要这个字段
-        type: "EXPRESSION"
-        sqlType: "INT"
-        expression: "renew_package_sales_amount - randomInt(0, 100)"
+        type: "RANDOM_DOUBLE"
+        sqlType: "DECIMAL"
+        min: 500
+        max: 6000
+        precision: 2
         nullable: false
       - name: "package_level"
         type: "LIST_RANDOM"
@@ -118,6 +121,7 @@ generators:
         type: "EXPRESSION"
         sqlType: "VARCHAR"
         expression: "package_level"
+        dependsOn: "package_level"
         nullable: false
       - name: "avg_applicants_num"
         type: "RANDOM_INT"
@@ -145,95 +149,151 @@ generators:
       - name: "active_compliance_status"
         type: "CONDITIONAL"
         sqlType: "VARCHAR"
-        nullable: false
+        dependsOn: "is_compliance_tax_target"
         conditions:
           - ifExpression: "is_compliance_tax_target == 'Y'"
-            thenValue: "compliance"
-          - elseValue: "notCompliance"
+            thenValue: "'compliance'"
+          - elseValue: "'notCompliance'"
+        nullable: false
+      - name: "_has_follow"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        includeInSql: false
+        expression: "randomBoolean(0.6)"
+        nullable: false
       - name: "lastest_follow_time"
-        type: "STATIC"
+        type: "CONDITIONAL"
         sqlType: "DATETIME"
-        value: "NULL"
+        dependsOn: "_has_follow"
+        conditions:
+          - ifExpression: "_has_follow == true"
+            thenValue: "randomDateTimeBeforeNow('yyyy-MM-dd HH:mm:ss', 30)"
+          - elseValue: "NULL"
         nullable: true
       - name: "follow_type"
-        type: "STATIC"
+        type: "CONDITIONAL"
         sqlType: "VARCHAR"
-        value: ""
-        nullable: false
+        dependsOn: "lastest_follow_time"
+        conditions:
+          - ifExpression: "lastest_follow_time != NULL"
+            thenValue: "lookupEnumCode('businessAction', 'RANDOM')"
+          - elseValue: "NULL"
+        nullable: true
       - name: "follow_type_name"
-        type: "STATIC"
+        type: "CONDITIONAL"
         sqlType: "VARCHAR"
-        value: ""
-        nullable: false
+        dependsOn: "follow_type"
+        conditions:
+          - ifExpression: "follow_type != NULL"
+            thenValue: "lookupEnumName('businessAction', follow_type)"
+          - elseValue: "NULL"
+        nullable: true
       - name: "follow_progress"
-        type: "STATIC"
+        type: "CONDITIONAL"
         sqlType: "VARCHAR"
-        value: ""
-        nullable: false
+        dependsOn: "lastest_follow_time"
+        conditions:
+          - ifExpression: "lastest_follow_time != NULL"
+            thenValue: "lookupEnumCode('specificItem', 'RANDOM')"
+          - elseValue: "NULL"
+        nullable: true
       - name: "follow_progress_name"
-        type: "STATIC"
+        type: "CONDITIONAL"
         sqlType: "VARCHAR"
-        value: ""
-        nullable: false
+        dependsOn: "follow_progress"
+        conditions:
+          - ifExpression: "follow_progress != NULL"
+            thenValue: "lookupEnumName('specificItem', follow_progress)"
+          - elseValue: "NULL"
+        nullable: true
       - name: "follow_intention"
-        type: "STATIC"
+        type: "CONDITIONAL"
         sqlType: "VARCHAR"
-        value: ""
-        nullable: false
+        dependsOn: "lastest_follow_time"
+        conditions:
+          - ifExpression: "lastest_follow_time != NULL"
+            thenValue: "lookupEnumCode('followResult', 'RANDOM')"
+          - elseValue: "NULL"
+        nullable: true
       - name: "follow_intention_name"
-        type: "STATIC"
+        type: "CONDITIONAL"
         sqlType: "VARCHAR"
-        value: ""
+        dependsOn: "follow_intention"
+        conditions:
+          - ifExpression: "follow_intention != NULL"
+            thenValue: "lookupEnumName('followResult', follow_intention)"
+          - elseValue: "NULL"
+        nullable: true
+      - name: "_has_order"
+        type: "EXPRESSION"
+        sqlType: "VARCHAR"
+        includeInSql: false
+        expression: "randomBoolean(0.8)"
         nullable: false
-      - name: "lastest_payment_method_name"
-        type: "STATIC"
+      - name: "lastest_payment_method"
+        type: "CONDITIONAL"
         sqlType: "VARCHAR"
-        value: "NULL"
+        dependsOn: "_has_order"
+        conditions:
+            - ifExpression: "_has_order == true"
+              thenValue: "lookupEnumCode('pay_method', 'RANDOM')"
+            - elseValue: "NULL"
+        nullable:  true
+      - name: "lastest_payment_method_name"
+        type: "CONDITIONAL"
+        sqlType: "VARCHAR"
+        dependsOn: "lastest_payment_method"
+        conditions:
+            - ifExpression: "lastest_payment_method != NULL"
+              thenValue: "lookupEnumName('pay_method', lastest_payment_method)"
+            - elseValue: "NULL"
         nullable: true
       - name: "lastest_payment_time"
-        type: "STATIC"
-        sqlType: "DATETIME"
-        value: "NULL"
+        type: "CONDITIONAL"
+        sqlType: "DATE"
+        dependsOn: "lastest_payment_method"
+        conditions:
+          - ifExpression: "lastest_payment_method != 'NULL'"
+            thenValue: "randomDateTimeBeforeNow('yyyy-MM-dd', 60)"
+          - elseValue: "NULL"
         nullable: true
       - name: "lastest_order_time"
-        type: "STATIC"
-        sqlType: "DATETIME"
-        value: "NULL"
+        type: "CONDITIONAL"
+        sqlType: "DATE"
+        dependsOn: "lastest_payment_method"
+        conditions:
+          - ifExpression: "lastest_payment_method != 'NULL'"
+            thenValue: "randomDateTimeBeforeNow('yyyy-MM-dd', 60)"
+          - elseValue: "NULL"
         nullable: true
-      - name: "renew_type"
-        type: "ENUM_LOOKUP"
+      - name: "customer_manage_id"
+        type: "EXPRESSION"
         sqlType: "VARCHAR"
-        category: "renew_type"
-        lookupBy: "CODE"
-        targetField: "NAME"
-        dependsOn: "renew_type_code"
-        nullable: false
-      - name: "renew_type_code"
-        type: "ENUM_LOOKUP"
-        sqlType: "VARCHAR"
-        category: "renew_type"
-        lookupBy: "NAME"
-        targetField: "CODE"
+        includeInSql: false
+        expression: "customer_manage_id" # From pre-filled
         nullable: false
       - name: "cust_mgr_id"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
-        expression: "customer_manage_id" # 优先使用从 CustomerData 反查出来的 manageId
+        expression: "customer_manage_id"
+        dependsOn: "customer_manage_id"
         nullable: false
       - name: "cust_mgr_name"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
         expression: "lookupCustMgrField(cust_mgr_id, 'custMgrName')"
+        dependsOn: "cust_mgr_id"
         nullable: false
-      - name: "big_region_code" # 注意顺序，big_region_code 需要先于 province_city_area_code
+      - name: "big_region_code"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
         expression: "lookupCustMgrField(cust_mgr_id, 'custMgrBigRegionCode')"
+        dependsOn: "cust_mgr_id"
         nullable: false
       - name: "province_city_area_code"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
-        expression: "lookupProvinceByRegion(big_region_code)"
+        expression: "province_city_area_code" # From pre-filled
         nullable: false
       - name: "is_order"
         type: "LIST_RANDOM"
@@ -375,7 +435,7 @@ generators:
         sqlType: "VARCHAR"
         expression: "cust_mgr_big_region_name"
         nullable: false
-      # 以下为 Detail 表独有字段，但由于使用命名占位符，可以混在一起定义
+      # 以下为 Detail 表独有字段
       - name: "order_id"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
@@ -434,51 +494,13 @@ generators:
       - name: "payment_method_name"
         type: "LIST_RANDOM"
         sqlType: "VARCHAR"
-        values: ["在线支付", "线下支付"]
+        values: ["非余额支付", "余额支付"]
         nullable: false
       - name: "order_type"
         type: "LIST_RANDOM"
         sqlType: "VARCHAR"
-        values: ["新商务订单", "内管订单", "退货单"]
+        values: ["新商务订单", "内管", "新商务退货单","新商务提现单","新商务充值单"]
         nullable: false
-
-#  tradeKpiPaymentDetail:
-#    tableName: "servyou_ads.ads_trade_kpi_zx_order_payment_detail_rt"
-#    dbKey: "db1"
-#    sqlTemplateKey: "trade_kpi_payment_detail"
-#    fields:
-#      - name: "payment_date"
-#        type: "DATE"
-#        sqlType: "DATE"
-#        format: "yyyy-MM-dd"
-#        baseDateSource: "PARAM"
-#        randomOffsetDaysMin: -5
-#        randomOffsetDaysMax: 0
-#        nullable: false
-#      - name: "customer_id"
-#        type: "REFERENCE_DATA"
-#        sqlType: "VARCHAR"
-#        refDataType: "CustomerData"
-#        lookupKeyField: "type"
-#        lookupValueSource: "2" # Default to Type 2 (or 3 via some logic, here hardcoded 2 as default example)
-#        fieldToPopulate: "id"
-#        defaultNotFoundValue: "CUST_DEFAULT"
-#        nullable: false
-#      - name: "customer_name"
-#        type: "REFERENCE_DATA"
-#        sqlType: "VARCHAR"
-#        refDataType: "CustomerData"
-#        lookupKeyField: "id"
-#        lookupValueSource: "customer_id"
-#        fieldToPopulate: "name"
-#        dependsOn: "customer_id"
-#        nullable: false
-#      - name: "zx_payment_amount"
-#        type: "RANDOM_INT"
-#        sqlType: "INT"
-#        min: 100
-#        max: 5000
-#        nullable: false
 
   csOrderPayment:
     tableName: "cctest_not_delete.ads_trade_kpi_cs_order_payment_rt"
@@ -668,41 +690,41 @@ generators:
 
   csBoardAuthMonthly:
     tableName: "cctest_not_delete.ads_cs_board_authorization_monthly"
-    dbKey: "db2" # 注意：需确认 application.yml 中配置了 db2 数据源
+    dbKey: "db2"
     sqlTemplateKey: "cs_board_auth_monthly"
     fields:
       - name: "true_id"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
-        expression: "customer_manage_id" # 直接引用预置的客户经理ID
+        expression: "customer_manage_id"
         nullable: false
       - name: "month"
         type: "DATE"
-        sqlType: "VARCHAR" # SQL中可能是字符串格式
+        sqlType: "VARCHAR"
         format: "yyyy-MM"
         baseDateSource: "PARAM"
         randomOffsetDaysMin: 0
-        randomOffsetDaysMax: 0 # 锁定为当月
+        randomOffsetDaysMax: 0
         nullable: false
       - name: "agent_id"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
-        expression: "customer_id" # 引用预置的客户ID
+        expression: "customer_id"
         nullable: false
       - name: "agent_name"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
-        expression: "customer_name" # 引用预置的客户名称
+        expression: "customer_name"
         nullable: false
       - name: "sale_area_id"
         type: "EXPRESSION"
-        sqlType: "INT" # 假设是数字
-        expression: "sale_area_id" # 引用 CustomerData 中的新字段
+        sqlType: "INT"
+        expression: "sale_area_id"
         nullable: true
       - name: "agent_user_code"
         type: "EXPRESSION"
         sqlType: "VARCHAR"
-        expression: "servyou_num" # 引用 CustomerData 中的新字段
+        expression: "servyou_num"
         nullable: true
       - name: "num"
         type: "RANDOM_INT"
