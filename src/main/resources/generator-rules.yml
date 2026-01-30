@@ -732,3 +732,10 @@ generators:
         min: 0
         max: 100
         nullable: false
+
+  customerReviewExpireSummary:
+    tableName: "ads_itcrm_customer_review_zx_product_expire_summary"
+    dbKey: "db2"
+    sqlTemplateKey: "customer_review_expire_summary_insert"
+    extraSqlTemplateKeys: ["customer_review_expire_summary_delete"]
+    fields: [] # 汇总类生成器不使用行级生成规则

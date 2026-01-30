@@ -9,6 +9,7 @@ import com.smartdata.smartruledatagen.model.rules.FieldRule;
 import com.smartdata.smartruledatagen.model.rules.GeneratorDefinition;
 import com.smartdata.smartruledatagen.model.rules.ReferenceDataFieldRule;
 import com.smartdata.smartruledatagen.service.ReferenceDataManager;
+import com.smartdata.smartruledatagen.service.SqlTemplateRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -30,6 +31,7 @@ public class DataGenController {
     private final GeneratorConfigLoader generatorConfigLoader;
     private final GenericDataGenerator genericDataGenerator;
     private final ReferenceDataManager referenceDataManager;
+    private final SqlTemplateRepository sqlTemplateRepository;
     private final Map<String, JdbcTemplate> jdbcTemplates;
 
     @GetMapping("/health")
@@ -57,6 +59,11 @@ public class DataGenController {
                 response.setSuccess(false);
                 response.setMessage("未找到对应的数据源配置: " + dbKey);
                 return response;
+            }
+
+            // 1.5 针对汇总类生成器的特殊处理
+            if ("customerReviewExpireSummary".equals(request.getGeneratorName())) {
+                return handleSummaryGeneration(request, definition, jdbcTemplate);
             }
 
             // 2. 验证地区并获取客户数据
@@ -163,7 +170,12 @@ public class DataGenController {
             // 传递 regionCode 供规则使用 (e.g. lookupProvinceByRegion)
             params.put("regionCode", request.getRegionCode());
             params.put("bigRegionCode", request.getRegionCode()); // 兼容旧名称
-            
+
+            // 合并扩展参数
+            if (request.getExtraParams() != null) {
+                params.putAll(request.getExtraParams());
+            }
+
             List<String> sqls = genericDataGenerator.generateSqls(definition, actualCount, params, preDefinedRecords);
 
             // 7. 执行插入 (如果需要)
@@ -197,6 +209,71 @@ public class DataGenController {
             log.error("Generation failed", e);
             response.setSuccess(false);
             response.setMessage("生成失败: " + e.getMessage());
+        }
+        return response;
+    }
+
+    private DataGenResponse handleSummaryGeneration(DataGenRequest request, GeneratorDefinition definition, JdbcTemplate jdbcTemplate) {
+        DataGenResponse response = new DataGenResponse();
+        Map<String, Object> extraParams = request.getExtraParams();
+
+        if (extraParams == null || !extraParams.containsKey("endDateMonth")) {
+            response.setSuccess(false);
+            response.setMessage("参数 endDateMonth 不能为空");
+            return response;
+        }
+
+        String endDateMonth = String.valueOf(extraParams.get("endDateMonth"));
+        // 优先从 extraParams 获取 regionCode，如果没有则取外层的
+        String bigRegionCode = extraParams.containsKey("regionCode")
+                ? String.valueOf(extraParams.get("regionCode"))
+                : request.getRegionCode();
+
+        if (bigRegionCode == null || bigRegionCode.isEmpty()) {
+            response.setSuccess(false);
+            response.setMessage("参数 regionCode 不能为空");
+            return response;
+        }
+
+        try {
+            // 1. 执行删除操作 (如果配置了)
+            if (definition.getExtraSqlTemplateKeys() != null && !definition.getExtraSqlTemplateKeys().isEmpty()) {
+                for (String deleteKey : definition.getExtraSqlTemplateKeys()) {
+                    String deleteSqlTemplate = sqlTemplateRepository.getTemplate(deleteKey);
+                    if (deleteSqlTemplate != null) {
+                        String deleteSql = deleteSqlTemplate
+                                .replace("{end_date_month}", endDateMonth)
+                                .replace("{big_region_code}", bigRegionCode);
+                        log.info("Executing summary delete SQL: {}", deleteSql);
+                        jdbcTemplate.execute(deleteSql);
+                    }
+                }
+            }
+
+            // 2. 执行汇总插入操作
+            String insertSqlTemplate = sqlTemplateRepository.getTemplate(definition.getSqlTemplateKey());
+            if (insertSqlTemplate == null) {
+                throw new RuntimeException("汇总插入模板未找到: " + definition.getSqlTemplateKey());
+            }
+
+            String insertSql = insertSqlTemplate
+                    .replace("{end_date_month}", endDateMonth)
+                    .replace("{big_region_code}", bigRegionCode);
+
+            log.info("Executing summary insert SQL: {}", insertSql);
+            // 使用 update 以获取受影响的行数
+            int rows = jdbcTemplate.update(insertSql);
+
+            response.setSuccess(true);
+            response.setMessage("汇总数据生成成功");
+            response.setGeneratedCount(rows);
+            response.setSuccessInsertCount(rows);
+            response.setSqls(Collections.singletonList(insertSql));
+
+        } catch (Exception e) {
+            log.error("Summary generation failed", e);
+            response.setSuccess(false);
+            response.setMessage("汇总生成失败: " + e.getMessage());
         }
         return response;
     }

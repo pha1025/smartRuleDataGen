@@ -48,6 +48,71 @@ public class SqlTemplateRepository {
                         "(true_id, `month`, agent_id, agent_name, sale_area_id, agent_user_code, num) " +
                         "VALUES " +
                         "({true_id}, {month}, {agent_id}, {agent_name}, {sale_area_id}, {agent_user_code}, {num})");
+
+        // 例6: customer_review_expire_summary 汇总模板
+        templates.put("customer_review_expire_summary_delete",
+                "DELETE FROM cctest_not_delete.ads_itcrm_customer_review_zx_product_expire_summary WHERE end_date_month = '{end_date_month}' AND big_region_code = '{big_region_code}'");
+
+        templates.put("customer_review_expire_summary_insert",
+                "INSERT INTO cctest_not_delete.ads_itcrm_customer_review_zx_product_expire_summary\n" +
+                        "SELECT t.end_date_month as end_date_month,\n" +
+                        "     t.province_city_area_code as province_city_area_code,\n" +
+                        "      t.outlet_code as outlet_code\n" +
+                        "      ,t.cust_mgr_id as cust_mgr_id\n" +
+                        "      ,t.cust_mgr_name\n" +
+                        "      ,count( distinct t.customer_id) as customer_cnt\n" +
+                        "      ,count( case when t.is_renew_code='Y' then t.customer_id end) as is_renew_cnt\n" +
+                        "      ,count( case when t.renew_type_code='unRenewed' then t.customer_id end) as not_renew_cnt\n" +
+                        "      ,sum(case when t.is_renew_code='Y' then t.real_package_sales_amt end) as real_package_sales_total_amt  -- 已续费产品包实际价值\n" +
+                        "      ,sum(t.cur_package_paid_amount) as cur_package_paid_total_amt  -- 当前月份到期户产品包实收金额\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='upgrade' then t.customer_id end) as upgrade_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='upgrade' and t.renew_type_code='upgrade' then t.customer_id end) as upgrade_upgrade_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='upgrade' and t.renew_type_code='continuation' then t.customer_id end) as upgrade_continuation_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='upgrade' and t.renew_type_code='reduced' then t.customer_id end) as upgrade_reduced_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='upgrade' and t.renew_type_code='unRenewed' then t.customer_id end) as upgrade_unRenewed_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='continuation' then t.customer_id end) as continuation_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='continuation' and t.renew_type_code='upgrade' then t.customer_id end) as continuation_upgrade_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='continuation' and t.renew_type_code='continuation' then t.customer_id end) as continuation_continuation_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='continuation' and t.renew_type_code='reduced' then t.customer_id end) as continuation_reduced_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='continuation' and t.renew_type_code='unRenewed' then t.customer_id end) as continuation_unRenewed_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='earlyRenewal' then t.customer_id end) as earlyRenewal_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='earlyRenewal' and t.renew_type_code='upgrade' then t.customer_id end) as earlyRenewal_upgrade_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='earlyRenewal' and t.renew_type_code='continuation' then t.customer_id end) as earlyRenewal_continuation_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='earlyRenewal' and t.renew_type_code='reduced' then t.customer_id end) as earlyRenewal_reduced_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='earlyRenewal' and t.renew_type_code='unRenewed' then t.customer_id end) as earlyRenewal_unRenewed_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='lose' then t.customer_id end) as lose_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='lose' and t.renew_type_code='upgrade' then t.customer_id end) as lose_upgrade_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='lose' and t.renew_type_code='continuation' then t.customer_id end) as lose_continuation_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='lose' and t.renew_type_code='reduced' then t.customer_id end) as lose_reduced_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='lose' and t.renew_type_code='unRenewed' then t.customer_id end) as lose_unRenewed_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='reduced' then t.customer_id end) as reduced_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='reduced' and t.renew_type_code='upgrade' then t.customer_id end) as reduced_upgrade_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='reduced' and t.renew_type_code='continuation' then t.customer_id end) as reduced_continuation_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='reduced' and t.renew_type_code='reduced' then t.customer_id end) as reduced_reduced_cnt\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='reduced' and t.renew_type_code='unRenewed' then t.customer_id end) as reduced_unRenewed_cnt\n" +
+                        "      ,case when t.big_region_code is not null then t.big_region_code else '000000' end as big_region_code\n" +
+                        "      ,count(case when t.renew_type_code='unRenewed' and (t.is_order='N') then t.customer_id end) as unRenewed_unorder_cnt  -- 未续费未下单\n" +
+                        "      ,count(case when t.renew_type_code='unRenewed' and (t.is_order='Y') then t.customer_id end) as unRenewed_order_cnt  -- 未续费已下单\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='upgrade' and t.renew_type_code='unRenewed' and t.is_order='N' then t.customer_id end) as upgrade_unRenewed_unOrder_cnt -- 升版未续费未下单\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='upgrade' and t.renew_type_code='unRenewed' and t.is_order='Y' then t.customer_id end) as upgrade_unRenewed_order_cnt -- 升版未续费已下单\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='continuation' and t.renew_type_code='unRenewed' and t.is_order='N' then t.customer_id end) as continuation_unRenewed_unOrder_cnt  -- 平续未续费未下单\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='continuation' and t.renew_type_code='unRenewed' and  t.is_order='Y' then t.customer_id end) as continuation_unRenewed_order_cnt  -- 平续未续费已下单\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='earlyRenewal' and t.renew_type_code='unRenewed' and t.is_order='N' then t.customer_id end) as earlyRenewal_unRenewed_unOrder_cnt  -- 提前续未续费未下单\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='earlyRenewal' and t.renew_type_code='unRenewed' and t.is_order='Y' then t.customer_id end) as earlyRenewal_unRenewed_order_cnt -- 提前续未续费已下单\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='lose' and t.renew_type_code='unRenewed' and t.is_order='N' then t.customer_id end) as lose_unRenewed_unOrder_cnt  -- 流失未续费未下单\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='lose' and t.renew_type_code='unRenewed' and t.is_order='Y' then t.customer_id end) as lose_unRenewed_order_cnt  -- 流失未续费已下单\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='reduced' and t.renew_type_code='unRenewed' and t.is_order='N' then t.customer_id end) as reduced_unRenewed_unOrder_cnt  -- 降版未续费未下单\n" +
+                        "      ,count( distinct case when t.expect_renew_type_code='reduced' and t.renew_type_code='unRenewed' and t.is_order='Y' then t.customer_id end) as reduced_unRenewed_order_cnt -- 降版未续费已下单\n" +
+                        " FROM\n" +
+                        "     cctest_not_delete.ads_itcrm_customer_review_zx_product_expire t\n" +
+                        " WHERE t.cust_mgr_id != '000' and end_date_month='{end_date_month}' and big_region_code='{big_region_code}'\n" +
+                        " GROUP BY\n" +
+                        "     t.outlet_code\n" +
+                        "        ,t.cust_mgr_id\n" +
+                        "        ,t.cust_mgr_name\n" +
+                        "        ,t.end_date_month\n" +
+                        "        ,case when t.big_region_code is not null then t.big_region_code else '000000' end\n" +
+                        "        ,t.province_city_area_code;");
     }
 
     public String getTemplate(String key) {
