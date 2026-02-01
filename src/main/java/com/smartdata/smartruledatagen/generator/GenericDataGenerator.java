@@ -178,9 +178,14 @@ public class GenericDataGenerator {
             String endDateMonth = String.valueOf(params.get("endDateMonth")).trim();
             if (!endDateMonth.isEmpty() && !"null".equalsIgnoreCase(endDateMonth)) {
                 String fieldName = rule.getName().toLowerCase();
-                if (fieldName.contains("month") || fieldName.contains("date") || fieldName.contains("time") || fieldName.contains("period")) {
-                    // 简单的日期补全逻辑：如果是 yyyy-MM 格式且目标是日期类型，补全为 1 号
-                    if (endDateMonth.length() == 7 && (fieldName.contains("date") || fieldName.contains("time"))) {
+                // 优先判断是否为“月份”字段：包含 month 且不包含 date/time 的，或者虽然包含 date 但明确是月份含义的
+                // 这里的逻辑优化：如果包含 month，我们倾向于保持 YYYY-MM 格式
+                if (fieldName.contains("month")) {
+                    return endDateMonth;
+                }
+                // 如果包含 date 或 time，则补全为日期格式
+                if (fieldName.contains("date") || fieldName.contains("time") || fieldName.contains("period")) {
+                    if (endDateMonth.length() == 7) {
                         return endDateMonth + "-01";
                     }
                     return endDateMonth;
