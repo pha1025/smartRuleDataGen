@@ -156,10 +156,18 @@ public class DataGenController {
                 record.put(idFieldName, customer.getCustomerId());
                 record.put(nameFieldName, customer.getCustomerName());
                 
-                // 将客户经理ID预置进去，键名为 "customer_manage_id"，以便规则中引用
-                // 这样在规则中可以通过 expression: "customer_manage_id" 引用
-                if (customer.getCustomerManageId() != null) {
-                    record.put("customer_manage_id", customer.getCustomerManageId());
+                // 将客户经理ID预置进去
+                String finalManageId = (customerManageId != null && !customerManageId.trim().isEmpty() && !"null".equalsIgnoreCase(customerManageId))
+                        ? customerManageId.trim()
+                        : customer.getCustomerManageId();
+
+                if (finalManageId != null) {
+                    record.put("customer_manage_id", finalManageId);
+                    // 同时也预置到生成器常用的经理 ID 字段中，这样会跳过 YAML 中的随机/引用规则
+                    record.put("cust_mgr_id", finalManageId);
+                    record.put("signer_id", finalManageId);
+                    record.put("income_khjl_id", finalManageId);
+                    record.put("income_khjl_id_detail", finalManageId);
                 }
                 if (customer.getServyouNum() != null) {
                     record.put("servyou_num", customer.getServyouNum());
