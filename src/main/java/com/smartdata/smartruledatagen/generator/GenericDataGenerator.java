@@ -173,16 +173,18 @@ public class GenericDataGenerator {
     }
 
     private Object generateFieldValue(FieldRule rule, Map<String, Object> recordData, Map<String, Object> params) {
-        // 全局覆盖逻辑：如果 params 中包含 endDateMonth，且字段名看起来像日期/月份字段，则优先覆盖
-        if (params.containsKey("endDateMonth")) {
-            String fieldName = rule.getName().toLowerCase();
-            if (fieldName.contains("month") || fieldName.contains("date") || fieldName.contains("time") || fieldName.contains("period")) {
-                String endDateMonth = String.valueOf(params.get("endDateMonth"));
-                // 简单的日期补全逻辑：如果是 yyyy-MM 格式且目标是日期类型，补全为 1 号
-                if (endDateMonth.length() == 7 && (fieldName.contains("date") || fieldName.contains("time"))) {
-                    return endDateMonth + "-01";
+        // 全局覆盖逻辑：如果 params 中包含有效的 endDateMonth，且字段名看起来像日期/月份字段，则优先覆盖
+        if (params.containsKey("endDateMonth") && params.get("endDateMonth") != null) {
+            String endDateMonth = String.valueOf(params.get("endDateMonth")).trim();
+            if (!endDateMonth.isEmpty() && !"null".equalsIgnoreCase(endDateMonth)) {
+                String fieldName = rule.getName().toLowerCase();
+                if (fieldName.contains("month") || fieldName.contains("date") || fieldName.contains("time") || fieldName.contains("period")) {
+                    // 简单的日期补全逻辑：如果是 yyyy-MM 格式且目标是日期类型，补全为 1 号
+                    if (endDateMonth.length() == 7 && (fieldName.contains("date") || fieldName.contains("time"))) {
+                        return endDateMonth + "-01";
+                    }
+                    return endDateMonth;
                 }
-                return endDateMonth;
             }
         }
 

@@ -72,11 +72,11 @@ public class DataGenController {
 
             String customerManageId = (String) extraParams.get("customerManageId");
 
-             if (customerManageId != null) {
-                 // 情况 A: 仅提供了经理 ID
-                 candidates = referenceDataManager.getCustomersByManageId(customerManageId);
-                 log.info("Found {} customers for manager {}", candidates.size(), customerManageId);
-             } else {
+              if (customerManageId != null && !customerManageId.trim().isEmpty() && !"null".equalsIgnoreCase(customerManageId)) {
+                  // 情况 A: 仅提供了经理 ID
+                  candidates = referenceDataManager.getCustomersByManageId(customerManageId.trim());
+                  log.info("Found {} customers for manager {}", candidates.size(), customerManageId);
+              } else {
                  // 情况 B: 兜底使用 regionCode 逻辑
                 if (request.getRegionCode() == null || request.getRegionCode().isEmpty()) {
                     response.setSuccess(false);
@@ -226,13 +226,18 @@ public class DataGenController {
         DataGenResponse response = new DataGenResponse();
         Map<String, Object> extraParams = request.getExtraParams();
 
-        if (extraParams == null || !extraParams.containsKey("endDateMonth")) {
+        if (extraParams == null || !extraParams.containsKey("endDateMonth") || extraParams.get("endDateMonth") == null) {
             response.setSuccess(false);
             response.setMessage("参数 endDateMonth 不能为空");
             return response;
         }
 
-        String endDateMonth = String.valueOf(extraParams.get("endDateMonth"));
+        String endDateMonth = String.valueOf(extraParams.get("endDateMonth")).trim();
+        if (endDateMonth.isEmpty() || "null".equalsIgnoreCase(endDateMonth)) {
+            response.setSuccess(false);
+            response.setMessage("参数 endDateMonth 不能为空或无效");
+            return response;
+        }
         // 优先从 extraParams 获取 regionCode，如果没有则取外层的
         String bigRegionCode = extraParams.containsKey("regionCode")
                 ? String.valueOf(extraParams.get("regionCode"))
