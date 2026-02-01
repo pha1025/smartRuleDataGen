@@ -152,6 +152,10 @@ public class ReferenceDataManager {
         return customerDataByType.getOrDefault(type, new ArrayList<>());
     }
 
+    public List<CustomerData> getCustomersByManageId(String manageId) {
+        return customerDataByManageId.getOrDefault(manageId, new ArrayList<>());
+    }
+
     public Optional<CustomerData> getCustomerById(String customerId) {
         return Optional.ofNullable(customerDataById.get(customerId));
     }

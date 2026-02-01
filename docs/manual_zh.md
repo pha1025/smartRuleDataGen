@@ -30,7 +30,8 @@
     确保 `src/main/resources/data` 目录下存在必要的业务数据文件：
     *   `customer_data.xlsx`: 客户基础信息（ID, 名称, 类型）。
     *   `cust_mgr_hierarchy.xlsx`: 客户经理层级结构。
-    *   `enum_data.xlsx`: 业务枚举字典。
+    *   `enum_dictionaries.xlsx`: 业务枚举字典。
+    *   `region_province.xlsx`: 区域与省份对应关系。
 
 2.  **应用配置 (`application.yml`)**：
     配置数据库连接字符串、用户名、密码以及 Excel 文件的加载路径。
@@ -46,7 +47,7 @@
 *   **STATIC_VALUE**: 使用固定值。
 *   **UUID**: 生成唯一标识符。
 *   **DATE**: 生成日期，支持相对于当前时间的偏移，也支持相对于 *其他字段* 的偏移（依赖生成）。
-*   **ENUM_LOOKUP**: 从 `enum_data.xlsx` 中随机选取符合条件的枚举值。
+*   **ENUM_LOOKUP**: 从 `enum_dictionaries.xlsx` 中随机选取符合条件的枚举值。
 
 #### 高级规则类型
 
@@ -91,6 +92,34 @@ java -Dautogen="<GeneratorID>,<Count>,<Params>,<ExportSQL>,<InsertDB>" -jar app.
 *   **ExportSQL**: `yes` 或 `no`，是否导出 insert.sql文件。
 *   **InsertDB**: `yes` 或 `no`，是否直接写入数据库。
 
+#### 方式三：Web API 调用 (推荐)
+
+启动 Spring Boot 应用后，可以通过 HTTP POST 接口触发数据生成。
+
+**接口**: `POST /api/datagen/generate`
+
+**请求体示例**:
+```json
+{
+    "generatorName": "tradeKpiPayment",
+    "count": 10,
+    "regionCode": "004012020",
+    "executeInsert": false,
+    "extraParams": {
+        "endDateMonth": "2024-05",
+        "customerManageId": "M001"
+    }
+}
+```
+
+**关键扩展参数 (extraParams)**:
+*   **`endDateMonth`**: (格式 `YYYY-MM`)。若传入，所有包含 `month`、`date`、`time` 或 `period` 的字段将强制覆盖为此值，**无论该字段是 DATE 类型还是 EXPRESSION 类型**。SQL 模板中的 `{endDateMonth}` 也会被替换。
+*   **`customerManageId`**: 指定客户经理 ID。
+
+**数据筛选优先级**:
+1.  **指定经理**: 若提供了 `customerManageId`，则从参考数据中获取该经理下的所有客户。
+2.  **指定地区**: 若未提供以上参数，则根据 `regionCode` 获取该地区下的所有客户。
+
 ---
 
 ## 3. 技术架构手册
@@ -101,10 +130,14 @@ java -Dautogen="<GeneratorID>,<Count>,<Params>,<ExportSQL>,<InsertDB>" -jar app.
 
 *   **CLI Layer (`com.smartdata.smartruledatagen.cli`)**:
     *   `DataGenRunner`: 实现了 `CommandLineRunner` 接口。作为程序的入口点，负责解析启动参数，决定是进入交互模式还是自动模式，并调度生成任务。
-    
+
+*   **Web Layer (`com.smartdata.smartruledatagen.controller`)**:
+    *   `DataGenController`: 提供 RESTful API 接口，接收 `DataGenRequest` 并返回 `DataGenResponse`，支持通过 HTTP 触发数据生成任务。
+
 *   **Generator Core (`com.smartdata.smartruledatagen.generator`)**:
-    *   `GenericDataGenerator`: 核心引擎。它不包含具体的业务逻辑，而是解析 YAML 规则，根据规则类型分发给不同的处理逻辑。
-    *   `handler/*.java`: (逻辑概念) 针对不同 `RuleType` 的具体处理实现。
+    *   `GenericDataGenerator`: 核心引擎。它解析 YAML 规则，根据规则类型分发给不同的处理逻辑。
+    *   `AbstractTableGenerator`: 业务生成器基类，封装了公共的生成与入库流程。
+    *   `TradeKpiPaymentGenerator` / `CustomerReviewGenerator`: 针对特定复杂业务场景定制的生成逻辑。
 
 *   **Service Layer (`com.smartdata.smartruledatagen.service`)**:
     *   `ReferenceDataManager`: 单例服务，负责在启动时加载 Excel 数据到内存，并提供高性能的查询接口（如按 ID 查找、按类型筛选）。
@@ -112,8 +145,9 @@ java -Dautogen="<GeneratorID>,<Count>,<Params>,<ExportSQL>,<InsertDB>" -jar app.
     *   `JdbcExecutor`: 封装 JDBC Template，负责构建批量 INSERT 语句并执行数据库操作。
 
 *   **Model Layer (`com.smartdata.smartruledatagen.model`)**:
+    *   `rules/`: 包含各种规则类型的具体实现类（如 `RandomIntFieldRule`, `DateFieldRule` 等）。
     *   定义了配置规则的 POJO (`FieldRule`, `GeneratorDefinition`)。
-    *   定义了业务数据模型 (`CustomerData`, `CustMgrData`)。
+    *   定义了业务数据模型 (`CustomerData`, `CustMgrData` 等)。
 
 ### 3.2 数据流向图
 
@@ -147,8 +181,10 @@ java -Dautogen="<GeneratorID>,<Count>,<Params>,<ExportSQL>,<InsertDB>" -jar app.
 | 类名 | 作用 | 备注 |
 | :--- | :--- | :--- |
 | `DataGenRunner` | 主控逻辑，CLI 入口 | 核心调度器 |
+| `DataGenController` | Web API 接口 | 处理远程生成请求 |
 | `GenericDataGenerator` | 通用生成器 | 规则解析与执行引擎 |
 | `ReferenceDataManager` | 静态数据管理 | 内存缓存，高性能查询 |
+| `JdbcExecutor` | 数据库执行器 | 负责 SQL 生成与入库 |
 | `RuleConfig` | YAML 配置映射对象 | 对应 generator-rules.yml |
 | `FieldRule` | 单个字段规则定义 | 描述字段如何生成 |
 

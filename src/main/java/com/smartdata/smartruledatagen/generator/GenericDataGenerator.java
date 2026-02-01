@@ -127,11 +127,15 @@ public class GenericDataGenerator {
             if (template.contains("{") && template.contains("}")) {
                 // 模式 1: 命名替换
                 String sql = template;
+                // 1. 替换生成的字段值 (已格式化为 SQL 字符串)
                 for (Map.Entry<String, String> entry : formattedValues.entrySet()) {
-                    // 替换 {fieldName} 为 'value' (已经格式化过的)
-                    // 注意：formattedValues 中的值已经包含了引号（如果是字符串）
-                    // 必须使用 replace 而不是 replaceAll (正则)
                     sql = sql.replace("{" + entry.getKey() + "}", entry.getValue());
+                }
+                // 2. 替换 params 中的原始参数 (如 endDateMonth, bigRegionCode 等)
+                for (Map.Entry<String, Object> entry : params.entrySet()) {
+                    if (entry.getValue() != null) {
+                        sql = sql.replace("{" + entry.getKey() + "}", String.valueOf(entry.getValue()));
+                    }
                 }
                 sqls.add(sql);
             } else {
@@ -169,6 +173,19 @@ public class GenericDataGenerator {
     }
 
     private Object generateFieldValue(FieldRule rule, Map<String, Object> recordData, Map<String, Object> params) {
+        // 全局覆盖逻辑：如果 params 中包含 endDateMonth，且字段名看起来像日期/月份字段，则优先覆盖
+        if (params.containsKey("endDateMonth")) {
+            String fieldName = rule.getName().toLowerCase();
+            if (fieldName.contains("month") || fieldName.contains("date") || fieldName.contains("time") || fieldName.contains("period")) {
+                String endDateMonth = String.valueOf(params.get("endDateMonth"));
+                // 简单的日期补全逻辑：如果是 yyyy-MM 格式且目标是日期类型，补全为 1 号
+                if (endDateMonth.length() == 7 && (fieldName.contains("date") || fieldName.contains("time"))) {
+                    return endDateMonth + "-01";
+                }
+                return endDateMonth;
+            }
+        }
+
         if (rule instanceof StaticFieldRule staticRule) {
             if (staticRule.getValue() != null && "NULL".equalsIgnoreCase(staticRule.getValue())) {
                 return null;

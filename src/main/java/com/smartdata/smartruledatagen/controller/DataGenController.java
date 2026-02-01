@@ -66,24 +66,33 @@ public class DataGenController {
                 return handleSummaryGeneration(request, definition, jdbcTemplate);
             }
 
-            // 2. 验证地区并获取客户数据
-            if (request.getRegionCode() == null || request.getRegionCode().isEmpty()) {
-                response.setSuccess(false);
-                response.setMessage("地区代码不能为空");
-                return response;
-            }
-            
-            // 简单验证地区是否存在 (通过是否有对应的客户经理数据/Sheet页)
-            if (!referenceDataManager.hasRegionData(request.getRegionCode())) {
-                response.setSuccess(false);
-                response.setMessage("地区代码不存在或该地区无客户经理数据: " + request.getRegionCode());
-                return response;
+            // 2. 获取客户数据 (支持通过 extraParams 指定经理或具体客户)
+            List<CustomerData> candidates = new ArrayList<>();
+            Map<String, Object> extraParams = request.getExtraParams() != null ? request.getExtraParams() : new HashMap<>();
+
+            String customerManageId = (String) extraParams.get("customerManageId");
+
+             if (customerManageId != null) {
+                 // 情况 A: 仅提供了经理 ID
+                 candidates = referenceDataManager.getCustomersByManageId(customerManageId);
+                 log.info("Found {} customers for manager {}", candidates.size(), customerManageId);
+             } else {
+                 // 情况 B: 兜底使用 regionCode 逻辑
+                if (request.getRegionCode() == null || request.getRegionCode().isEmpty()) {
+                    response.setSuccess(false);
+                    response.setMessage("地区代码不能为空 (当未指定 customerManageId 时)");
+                    return response;
+                }
+                if (!referenceDataManager.hasRegionData(request.getRegionCode())) {
+                    response.setSuccess(false);
+                    response.setMessage("地区代码不存在或该地区无客户经理数据: " + request.getRegionCode());
+                    return response;
+                }
+                candidates = referenceDataManager.getCustomersByRegion(request.getRegionCode());
+                log.info("Total candidates for region {}: {}", request.getRegionCode(), candidates.size());
             }
 
-            List<CustomerData> candidates = referenceDataManager.getCustomersByRegion(request.getRegionCode());
-            log.info("Total candidates for region {}: {}", request.getRegionCode(), candidates.size());
-            
-            // 针对 tradeKpiPayment 生成器，只筛选 type=1 的客户
+            // 针对业务逻辑的进一步筛选
             if ("tradeKpiPayment".equals(request.getGeneratorName())) {
                 candidates = candidates.stream()
                         .filter(c -> "1".equals(c.getCustomerType()))
