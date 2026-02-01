@@ -186,7 +186,18 @@ public class GenericDataGenerator {
                 // 如果包含 date 或 time，则补全为日期格式
                 if (fieldName.contains("date") || fieldName.contains("time") || fieldName.contains("period")) {
                     if (endDateMonth.length() == 7) {
-                        return endDateMonth + "-01";
+                        try {
+                            // 解析 YYYY-MM 并在该月内随机选择一天
+                            String[] parts = endDateMonth.split("-");
+                            int year = Integer.parseInt(parts[0]);
+                            int month = Integer.parseInt(parts[1]);
+                            java.time.YearMonth yearMonth = java.time.YearMonth.of(year, month);
+                            int randomDay = ThreadLocalRandom.current().nextInt(1, yearMonth.lengthOfMonth() + 1);
+                            return String.format("%s-%02d", endDateMonth, randomDay);
+                        } catch (Exception e) {
+                            log.warn("Failed to generate random day for {}, falling back to 01", endDateMonth);
+                            return endDateMonth + "-01";
+                        }
                     }
                     return endDateMonth;
                 }
