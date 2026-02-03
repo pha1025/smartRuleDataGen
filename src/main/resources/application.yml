@@ -10,6 +10,11 @@ spring:
       username: root
       password: test_user_pass66
       driver-class-name: com.mysql.cj.jdbc.Driver
+    ck: # ClickHouse 数据库配置
+      jdbc-url: jdbc:clickhouse://10.199.141.62:8123/default?compress=0
+      username: clickhouse
+      password: clickhouse
+      driver-class-name: com.clickhouse.jdbc.ClickHouseDriver
 
 excel:
   # 客户经理层级数据文件路径
@@ -28,8 +33,8 @@ generator:
   rules-path: classpath:generator-rules.yml # 新增：规则文件路径
 
 ai:
-  # LLM API Configuration
-  api-url: https://api.deepseek.com/v1/chat/completions # Default to DeepSeek, can be changed
-  api-key: ${AI_API_KEY:sk-your-api-key-here} # Use env var or default
-  model: deepseek-chat # Model name
-  temperature: 0.1
+  # Coze API Configuration
+  # 官方文档: https://www.coze.cn/docs/developer_guide/workflow_run
+  api-url: https://api.coze.cn/v1/workflow/run
+  api-key: ${COZE_PAT:your-coze-pat-here} # Coze Personal Access Token
+  workflow-id: ${COZE_WORKFLOW_ID:your-workflow-id-here} # Coze Workflow ID

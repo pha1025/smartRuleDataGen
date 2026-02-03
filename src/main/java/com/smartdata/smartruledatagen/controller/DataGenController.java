@@ -1,6 +1,7 @@
 package com.smartdata.smartruledatagen.controller;
 
 import com.smartdata.smartruledatagen.config.GeneratorConfigLoader;
+import com.smartdata.smartruledatagen.dto.ConsumePtsRequest;
 import com.smartdata.smartruledatagen.dto.DataGenRequest;
 import com.smartdata.smartruledatagen.dto.DataGenResponse;
 import com.smartdata.smartruledatagen.generator.GenericDataGenerator;
@@ -19,7 +20,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 @RestController
@@ -37,6 +43,229 @@ public class DataGenController {
     @GetMapping("/health")
     public String health() {
         return "OK";
+    }
+
+    @PostMapping("/consume-pts")
+    public DataGenResponse generateConsumePtsData(@RequestBody ConsumePtsRequest request) {
+        log.info("generateConsumePtsData request: {}", request);
+        DataGenResponse response = new DataGenResponse();
+        try {
+            JdbcTemplate jdbcTemplate = jdbcTemplates.get("ckJdbcTemplate");
+            if (request.isExecuteInsert() && jdbcTemplate == null) {
+                response.setSuccess(false);
+                response.setMessage("未找到 ClickHouse 数据源配置 (ckJdbcTemplate)");
+                return response;
+            }
+
+            String statsMonthStr = request.getStatistics_month();
+            YearMonth yearMonth = YearMonth.parse(statsMonthStr);
+            DateTimeFormatter fullTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            DateTimeFormatter dayFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+
+            List<EmployeeRecord> employeeRecords = new ArrayList<>();
+            Random random = new Random();
+
+            // 1. 生成员工明细数据
+            for (int i = 0; i < request.getCompanyNum(); i++) {
+                long companyId = Math.abs(ThreadLocalRandom.current().nextLong(1000000000000L, 9999999999999L));
+                String companyName = "企业名称" + companyId;
+
+                for (int j = 0; j < request.getDeptNum(); j++) {
+                    long deptId = Math.abs(ThreadLocalRandom.current().nextLong(1000000000L, 9999999999L));
+                    String deptName = "部门" + deptId;
+
+                    for (int k = 0; k < request.getEmployeeNum(); k++) {
+                        EmployeeRecord record = new EmployeeRecord();
+                        record.customerId = request.getCustomer_id();
+                        record.customerName = request.getCustomer_name();
+                        record.companyId = companyId;
+                        record.companyName = companyName;
+                        record.deptId = deptId;
+                        record.deptName = deptName;
+                        record.employeeId = Math.abs(ThreadLocalRandom.current().nextLong(100000000000L, 999999999999L));
+                        record.employeeName = "员工" + record.employeeId;
+                        record.licenseType = "201";
+                        record.licenseNumber = UUID.randomUUID().toString().substring(0, 16); // 模拟加密串
+                        
+                        record.totalCount = random.nextInt(10);
+                        record.employeeDeclareCount = random.nextInt(5);
+                        record.specialDeductionDeclareCount = random.nextInt(5);
+                        record.taxCalculateCount = random.nextInt(5);
+                        record.taxReportCount = random.nextInt(5);
+
+                        // 随机生成月份内的日期和时间
+                        int day = random.nextInt(yearMonth.lengthOfMonth()) + 1;
+                        int hour = random.nextInt(24);
+                        int min = random.nextInt(60);
+                        int sec = random.nextInt(60);
+                        LocalDateTime randomDateTime = yearMonth.atDay(day).atTime(hour, min, sec);
+                        String timeStr = randomDateTime.format(fullTimeFormatter);
+                        
+                        record.totalLastUpdate = timeStr;
+                        record.employeeDeclareLastUpdate = timeStr;
+                        record.specialDeductionDeclareLastUpdate = timeStr;
+                        record.taxCalculateLastUpdate = timeStr;
+                        record.taxReportLastUpdate = timeStr;
+                        
+                        record.statisticsMonth = statsMonthStr;
+                        record.eventMonth = statsMonthStr;
+                        record.createTime = yearMonth.atDay(day).format(dayFormatter);
+
+                        employeeRecords.add(record);
+                    }
+                }
+            }
+
+            List<String> allSqls = new ArrayList<>();
+
+            // 2. 生成明细表 SQL
+            String employeeSqlTemplate = "INSERT INTO `default`.ads_consume_pts_original_dept_employee_month_group_mi_final " +
+                    "(customer_id, customer_name, company_id, company_name, dept_id, dept_name, employee_id, employee_name, license_type, license_number, total_count, total_last_update, employee_declare_count, employee_declare_last_update, special_deduction_declare_count, special_deduction_declare_last_update, tax_calculate_count, tax_calculate_last_update, tax_report_count, tax_report_last_update, statistics_month, create_time, event_month) " +
+                    "VALUES (%d, '%s', %d, '%s', %d, '%s', %d, '%s', '%s', '%s', %d, '%s', %d, '%s', %d, '%s', %d, '%s', %d, '%s', '%s', '%s', '%s')";
+
+            for (EmployeeRecord r : employeeRecords) {
+                allSqls.add(String.format(employeeSqlTemplate,
+                        r.customerId, r.customerName, r.companyId, r.companyName, r.deptId, r.deptName, r.employeeId, r.employeeName,
+                        r.licenseType, r.licenseNumber, r.totalCount, r.totalLastUpdate, r.employeeDeclareCount, r.employeeDeclareLastUpdate,
+                        r.specialDeductionDeclareCount, r.specialDeductionDeclareLastUpdate, r.taxCalculateCount, r.taxCalculateLastUpdate,
+                        r.taxReportCount, r.taxReportLastUpdate, r.statisticsMonth, r.createTime, r.eventMonth));
+            }
+
+            // 3. 聚合生成部门汇总数据 SQL
+            Map<String, AggregatedData> deptAggregates = new HashMap<>();
+            for (EmployeeRecord r : employeeRecords) {
+                String key = r.companyId + "_" + r.deptId;
+                AggregatedData agg = deptAggregates.computeIfAbsent(key, k -> {
+                    AggregatedData d = new AggregatedData();
+                    d.customerId = r.customerId;
+                    d.customerName = r.customerName;
+                    d.companyId = r.companyId;
+                    d.companyName = r.companyName;
+                    d.deptId = r.deptId;
+                    d.deptName = r.deptName;
+                    d.statisticsMonth = r.statisticsMonth;
+                    d.createTime = r.createTime;
+                    d.eventMonth = r.eventMonth;
+                    return d;
+                });
+                agg.totalCount += r.totalCount;
+                agg.employeeDeclareCount += r.employeeDeclareCount;
+                agg.specialDeductionDeclareCount += r.specialDeductionDeclareCount;
+                agg.taxCalculateCount += r.taxCalculateCount;
+                agg.taxReportCount += r.taxReportCount;
+            }
+
+            String deptSqlTemplate = "INSERT INTO `default`.ads_consume_pts_original_dept_month_group_mi_final " +
+                    "(customer_id, customer_name, company_id, company_name, dept_id, dept_name, total_count, employee_declare_count, special_deduction_declare_count, tax_calculate_count, tax_report_count, statistics_month, create_time, event_month) " +
+                    "VALUES (%d, '%s', %d, '%s', %d, '%s', %d, %d, %d, %d, %d, '%s', '%s', '%s')";
+
+            for (AggregatedData r : deptAggregates.values()) {
+                allSqls.add(String.format(deptSqlTemplate,
+                        r.customerId, r.customerName, r.companyId, r.companyName, r.deptId, r.deptName,
+                        r.totalCount, r.employeeDeclareCount, r.specialDeductionDeclareCount, r.taxCalculateCount, r.taxReportCount,
+                        r.statisticsMonth, r.createTime, r.eventMonth));
+            }
+
+            // 4. 聚合生成企业汇总数据 SQL
+            Map<Long, AggregatedData> companyAggregates = new HashMap<>();
+            for (EmployeeRecord r : employeeRecords) {
+                AggregatedData agg = companyAggregates.computeIfAbsent(r.companyId, k -> {
+                    AggregatedData d = new AggregatedData();
+                    d.customerId = r.customerId;
+                    d.customerName = r.customerName;
+                    d.companyId = r.companyId;
+                    d.companyName = r.companyName;
+                    d.statisticsMonth = r.statisticsMonth;
+                    d.createTime = r.createTime;
+                    d.eventMonth = r.eventMonth;
+                    return d;
+                });
+                agg.totalCount += r.totalCount;
+                agg.employeeDeclareCount += r.employeeDeclareCount;
+                agg.specialDeductionDeclareCount += r.specialDeductionDeclareCount;
+                agg.taxCalculateCount += r.taxCalculateCount;
+                agg.taxReportCount += r.taxReportCount;
+            }
+
+            String companySqlTemplate = "INSERT INTO `default`.ads_consume_pts_original_company_month_group_mi_final " +
+                    "(customer_id, customer_name, company_id, company_name, total_count, employee_declare_count, special_deduction_declare_count, tax_calculate_count, tax_report_count, statistics_month, create_time, event_month) " +
+                    "VALUES (%d, '%s', %d, '%s', %d, %d, %d, %d, %d, '%s', '%s', '%s')";
+
+            for (AggregatedData r : companyAggregates.values()) {
+                allSqls.add(String.format(companySqlTemplate,
+                        r.customerId, r.customerName, r.companyId, r.companyName,
+                        r.totalCount, r.employeeDeclareCount, r.specialDeductionDeclareCount, r.taxCalculateCount, r.taxReportCount,
+                        r.statisticsMonth, r.createTime, r.eventMonth));
+            }
+
+            // 5. 执行入库
+            int successCount = 0;
+            if (request.isExecuteInsert()) {
+                for (String sql : allSqls) {
+                    try {
+                        jdbcTemplate.execute(sql);
+                        successCount++;
+                    } catch (Exception e) {
+                        log.error("ClickHouse SQL execution failed: {}", sql, e);
+                    }
+                }
+            }
+
+            response.setSuccess(true);
+            response.setMessage("ClickHouse 数据生成成功");
+            response.setGeneratedCount(allSqls.size());
+            response.setSuccessInsertCount(successCount);
+            response.setSqls(allSqls);
+
+        } catch (Exception e) {
+            log.error("ClickHouse data generation failed", e);
+            response.setSuccess(false);
+            response.setMessage("生成失败: " + e.getMessage());
+        }
+        return response;
+    }
+
+    private static class EmployeeRecord {
+        long customerId;
+        String customerName;
+        long companyId;
+        String companyName;
+        long deptId;
+        String deptName;
+        long employeeId;
+        String employeeName;
+        String licenseType;
+        String licenseNumber;
+        int totalCount;
+        String totalLastUpdate;
+        int employeeDeclareCount;
+        String employeeDeclareLastUpdate;
+        int specialDeductionDeclareCount;
+        String specialDeductionDeclareLastUpdate;
+        int taxCalculateCount;
+        String taxCalculateLastUpdate;
+        int taxReportCount;
+        String taxReportLastUpdate;
+        String statisticsMonth;
+        String createTime;
+        String eventMonth;
+    }
+
+    private static class AggregatedData {
+        long customerId;
+        String customerName;
+        long companyId;
+        String companyName;
+        long deptId;
+        String deptName;
+        long totalCount = 0;
+        long employeeDeclareCount = 0;
+        long specialDeductionDeclareCount = 0;
+        long taxCalculateCount = 0;
+        long taxReportCount = 0;
+        String statisticsMonth;
+        String createTime;
+        String eventMonth;
     }
 
     @PostMapping("/generate")

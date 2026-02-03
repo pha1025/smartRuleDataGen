@@ -20,12 +20,14 @@ public class JdbcExecutor {
     // 使用 @Qualifier 注解明确指定要注入哪个 JdbcTemplate Bean
     public JdbcExecutor(
             @Qualifier("db1JdbcTemplate") JdbcTemplate db1JdbcTemplate,
-            @Qualifier("db2JdbcTemplate") JdbcTemplate db2JdbcTemplate
+            @Qualifier("db2JdbcTemplate") JdbcTemplate db2JdbcTemplate,
+            @Qualifier("ckJdbcTemplate") JdbcTemplate ckJdbcTemplate
             // 如果有更多数据源，也需要在这里添加 @Qualifier 注解
     ) {
         this.jdbcTemplates = new HashMap<>();
         this.jdbcTemplates.put("db1", db1JdbcTemplate);
         this.jdbcTemplates.put("db2", db2JdbcTemplate);
+        this.jdbcTemplates.put("ck", ckJdbcTemplate);
         // ... 添加更多数据源
     }
 

@@ -36,5 +36,17 @@ public class DataSourceConfig {
         return new JdbcTemplate(dataSource);
     }
 
+    // ClickHouse DataSource
+    @Bean
+    @ConfigurationProperties(prefix = "spring.datasource.ck")
+    public DataSource ckDataSource() {
+        return DataSourceBuilder.create().build();
+    }
+
+    @Bean
+    public JdbcTemplate ckJdbcTemplate(@Qualifier("ckDataSource") DataSource dataSource) {
+        return new JdbcTemplate(dataSource);
+    }
+
     // 可以添加更多数据源
 }
