@@ -36,6 +36,18 @@ public class DataSourceConfig {
         return new JdbcTemplate(dataSource);
     }
 
+    // DB3 DataSource
+    @Bean
+    @ConfigurationProperties(prefix = "spring.datasource.db3")
+    public DataSource db3DataSource() { // Bean name is "db3DataSource"
+        return DataSourceBuilder.create().build();
+    }
+
+    @Bean
+    public JdbcTemplate db3JdbcTemplate(@Qualifier("db3DataSource") DataSource dataSource) { // Bean name is "db3JdbcTemplate"
+        return new JdbcTemplate(dataSource);
+    }
+
     // ClickHouse DataSource
     @Bean
     @ConfigurationProperties(prefix = "spring.datasource.ck")

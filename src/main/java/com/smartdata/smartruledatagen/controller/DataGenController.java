@@ -28,6 +28,9 @@ import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
+import com.smartdata.smartruledatagen.model.CustMgrData;
+import com.smartdata.smartruledatagen.model.PersonInfoData;
+
 @RestController
 @RequestMapping("/api/datagen")
 @RequiredArgsConstructor
@@ -39,6 +42,7 @@ public class DataGenController {
     private final ReferenceDataManager referenceDataManager;
     private final SqlTemplateRepository sqlTemplateRepository;
     private final Map<String, JdbcTemplate> jdbcTemplates;
+    private final Random random = new Random();
 
     @GetMapping("/health")
     public String health() {
@@ -225,6 +229,317 @@ public class DataGenController {
         return response;
     }
 
+    private DataGenResponse handleWorkloadStatisticsGeneration(DataGenRequest request, GeneratorDefinition definition, JdbcTemplate jdbcTemplate) {
+        DataGenResponse response = new DataGenResponse();
+        List<String> allSqls = new ArrayList<>();
+        int successCount = 0;
+
+        try {
+            // 1. 确定日期 (cal_date)
+            String calDateStr;
+            Map<String, Object> extraParams = request.getExtraParams() != null ? request.getExtraParams() : new HashMap<>();
+            String endDateMonth = (String) extraParams.get("endDateMonth");
+            
+            LocalDate today = LocalDate.now();
+            if (endDateMonth != null && !endDateMonth.isEmpty() && !"null".equalsIgnoreCase(endDateMonth)) {
+                YearMonth ym = YearMonth.parse(endDateMonth, DateTimeFormatter.ofPattern("yyyy-MM"));
+                if (ym.equals(YearMonth.from(today))) {
+                     // 本月：随机一天且不超过当天
+                     int maxDay = today.getDayOfMonth();
+                     int randomDay = random.nextInt(maxDay) + 1;
+                     calDateStr = today.withDayOfMonth(randomDay).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                } else {
+                     // 历史月份：任意一天
+                     int maxDay = ym.lengthOfMonth();
+                     int randomDay = random.nextInt(maxDay) + 1;
+                     calDateStr = ym.atDay(randomDay).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+                }
+            } else {
+                 // 默认本月不超过当天
+                 int maxDay = today.getDayOfMonth();
+                 int randomDay = random.nextInt(maxDay) + 1;
+                 calDateStr = today.withDayOfMonth(randomDay).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            }
+
+            // 2. 确定客户经理 (cust_mgr)
+            List<CustMgrData> candidates;
+            String regionCode = request.getRegionCode();
+            String customerManageId = (String) extraParams.get("customerManageId");
+
+            if (customerManageId != null && !customerManageId.trim().isEmpty() && !"null".equalsIgnoreCase(customerManageId)) {
+                // 优先使用 customerManageId
+                Optional<CustMgrData> mgrOpt = referenceDataManager.getCustMgrById(customerManageId.trim());
+                if (mgrOpt.isPresent()) {
+                    candidates = Collections.singletonList(mgrOpt.get());
+                    log.info("Using specific manager from customerManageId: {}", customerManageId);
+                } else {
+                    log.warn("customerManageId {} not found, falling back to regionCode logic", customerManageId);
+                    if (referenceDataManager.hasRegionData(regionCode)) {
+                        candidates = referenceDataManager.getCustMgrsByBigRegion(regionCode);
+                    } else {
+                        response.setSuccess(false);
+                        response.setMessage("无效的 regionCode: " + regionCode + " 且 customerManageId 未找到: " + customerManageId);
+                        return response;
+                    }
+                }
+            } else if (referenceDataManager.hasRegionData(regionCode)) {
+                candidates = referenceDataManager.getCustMgrsByBigRegion(regionCode);
+            } else {
+                response.setSuccess(false);
+                response.setMessage("无效的 regionCode: " + regionCode);
+                return response;
+            }
+
+            // 3. 循环生成
+            int count = request.getCount();
+            for (int i = 0; i < count; i++) {
+                CustMgrData mgr = candidates.get(random.nextInt(candidates.size()));
+                
+                // 3.1 生成主表数据
+                int callNum = random.nextInt(11); // 0-10
+                int thruNum = callNum > 0 ? random.nextInt(callNum + 1) : 0;
+                int thru16sNum = thruNum > 0 ? random.nextInt(thruNum + 1) : 0;
+                int thru30sNum = thru16sNum > 0 ? random.nextInt(thru16sNum + 1) : 0;
+                int thru60sNum = thru30sNum > 0 ? random.nextInt(thru30sNum + 1) : 0;
+                
+                double chatDuration = Math.round(random.nextDouble() * 10000.0) / 100.0; // 随机两位小数
+                int visitNum = random.nextInt(11);
+                int remoteNum = random.nextInt(11);
+                int wxworkNum = random.nextInt(11);
+                int callFollowNum = random.nextInt(11);
+                int wxworkFollowNum = random.nextInt(11);
+
+                String mainSqlTemplate = sqlTemplateRepository.getTemplate("itcrm_cust_mgr_workload_statistics");
+                String mainSql = mainSqlTemplate
+                        .replace("{cal_date}", "'" + calDateStr + "'")
+                        .replace("{cust_mgr_id}", "'" + mgr.getCustMgrId() + "'")
+                        .replace("{cust_mgr_outlet_code}", "'" + mgr.getCustMgrOutletCode() + "'")
+                        .replace("{cust_mgr_name}", "'" + mgr.getCustMgrName() + "'")
+                        .replace("{cust_mgr_outlet_name}", "'" + mgr.getCustMgrOutletName() + "'")
+                        .replace("{call_num}", String.valueOf(callNum))
+                        .replace("{thru_num}", String.valueOf(thruNum))
+                        .replace("{thru_16s_num}", String.valueOf(thru16sNum))
+                        .replace("{thru_30s_num}", String.valueOf(thru30sNum))
+                        .replace("{thru_60s_num}", String.valueOf(thru60sNum))
+                        .replace("{chat_duration}", String.valueOf(chatDuration))
+                        .replace("{visit_num}", String.valueOf(visitNum))
+                        .replace("{remote_num}", String.valueOf(remoteNum))
+                        .replace("{wxwork_num}", String.valueOf(wxworkNum))
+                        .replace("{call_follow_num}", String.valueOf(callFollowNum))
+                        .replace("{wxwork_follow_num}", String.valueOf(wxworkFollowNum));
+                allSqls.add(mainSql);
+
+                // 3.2 生成子表1 (通话明细)
+                // 逻辑：thru60s -> 产生5条 (call, thru, thru_16s, thru_30s, thru_60s)
+                //      thru30s-thru60s -> 产生4条
+                //      thru16s-thru30s -> 产生3条
+                //      thru-thru16s -> 产生2条 (call, thru)
+                //      call-thru -> 产生1条 (call, status=fail)
+
+                String detail1Template = sqlTemplateRepository.getTemplate("itcrm_cust_mgr_workload_detail");
+                DateTimeFormatter timeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+                
+                // 处理接通的 (递归逻辑)
+                // 我们可以倒序处理，从 thru60s 开始
+                // 实际生成的记录数 = thru60s * 5 + (thru30s-thru60s)*4 + ...
+                
+                // 简化生成逻辑：定义每种最终状态需要的 flag 集合
+                // Thru 60s: [call, thru, thru_16s, thru_30s, thru_60s]
+                // Thru 30s: [call, thru, thru_16s, thru_30s]
+                // Thru 16s: [call, thru, thru_16s]
+                // Thru:     [call, thru]
+                // Failed:   [call]
+
+                int count60s = thru60sNum;
+                int count30s = thru30sNum - thru60sNum;
+                int count16s = thru16sNum - thru30sNum;
+                int countThru = thruNum - thru16sNum;
+                int countFail = callNum - thruNum;
+
+                // Helper to generate a batch of records for one call event
+                generateCallDetails(allSqls, detail1Template, calDateStr, mgr, count60s, 60, timeFormatter);
+                generateCallDetails(allSqls, detail1Template, calDateStr, mgr, count30s, 30, timeFormatter);
+                generateCallDetails(allSqls, detail1Template, calDateStr, mgr, count16s, 16, timeFormatter);
+                generateCallDetails(allSqls, detail1Template, calDateStr, mgr, countThru, 0, timeFormatter); // 0 means connected but < 16s
+                generateCallDetails(allSqls, detail1Template, calDateStr, mgr, countFail, -1, timeFormatter); // -1 means failed
+
+                // 3.3 生成子表2 (上门明细)
+                String detail2Template = sqlTemplateRepository.getTemplate("itcrm_cust_mgr_workload_visit_door_detail");
+                List<CustomerData> customers = referenceDataManager.getCustomersByManageId(mgr.getCustMgrId());
+                // 如果该经理没客户，随机取该区域的
+                if (customers.isEmpty()) {
+                    customers = referenceDataManager.getCustomersByRegion(regionCode);
+                }
+                
+                for (int v = 0; v < visitNum; v++) {
+                     CustomerData cust = customers.isEmpty() ? null : customers.get(random.nextInt(customers.size()));
+                     String companyId = cust != null ? cust.getCustomerId() : UUID.randomUUID().toString().replace("-", "");
+                     String custName = cust != null ? cust.getCustomerName() : "未知客户";
+                     
+                     String randomTime = generateRandomTime(calDateStr, timeFormatter);
+
+                     String sql = detail2Template
+                             .replace("{cal_date}", "'" + calDateStr + "'")
+                             .replace("{cust_mgr_id}", "'" + mgr.getCustMgrId() + "'")
+                             .replace("{cust_mgr_outlet_code}", "'" + mgr.getCustMgrOutletCode() + "'")
+                             .replace("{company_id}", "'" + companyId + "'")
+                             .replace("{customer_name}", "'" + custName + "'")
+                             .replace("{sign_in_time}", "'" + randomTime + "'")
+                             .replace("{sign_in_address}", "'默认签到地址'")
+                             .replace("{sign_out_time}", "'" + randomTime + "'")
+                             .replace("{sign_out_address}", "'默认签退地址'")
+                             .replace("{contact_time}", "'" + randomTime + "'")
+                             .replace("{business_action}", "'默认拜访'")
+                             .replace("{specific_item}", "'默认事项'")
+                             .replace("{follow_result}", "'默认结果'")
+                             .replace("{follow_record}", "'默认记录'")
+                             .replace("{create_time}", "'" + randomTime + "'");
+                     allSqls.add(sql);
+                }
+
+                // 3.4 生成子表3 (跟进记录明细)
+                String detail3Template = sqlTemplateRepository.getTemplate("itcrm_cust_mgr_workload_follow_record_detail");
+                
+                generateFollowDetails(allSqls, detail3Template, calDateStr, mgr, remoteNum, "remote", customers, timeFormatter);
+                generateFollowDetails(allSqls, detail3Template, calDateStr, mgr, wxworkFollowNum, "wxwork", customers, timeFormatter);
+                generateFollowDetails(allSqls, detail3Template, calDateStr, mgr, callFollowNum, "call", customers, timeFormatter);
+            }
+
+            // 4. 执行
+            if (request.isExecuteInsert()) {
+                for (String sql : allSqls) {
+                    try {
+                        jdbcTemplate.execute(sql);
+                        successCount++;
+                    } catch (Exception e) {
+                        log.error("Failed to execute SQL: {}", sql, e);
+                    }
+                }
+            }
+
+            response.setSuccess(true);
+            response.setMessage("工作量统计数据生成成功");
+            response.setGeneratedCount(allSqls.size());
+            response.setSuccessInsertCount(successCount);
+            response.setSqls(allSqls);
+
+        } catch (Exception e) {
+            log.error("Workload stats generation failed", e);
+            response.setSuccess(false);
+            response.setMessage("生成失败: " + e.getMessage());
+        }
+        return response;
+    }
+
+    private void generateCallDetails(List<String> sqls, String template, String calDate, CustMgrData mgr, int count, int type, DateTimeFormatter formatter) {
+        // type: 60 (>=60s), 30 (30-60), 16 (16-30), 0 (0-16), -1 (fail)
+        for (int i = 0; i < count; i++) {
+            PersonInfoData person = referenceDataManager.getRandomPersonInfo();
+            String phone = person != null ? maskPhone(person.getCalledPhoneNumber()) : "138****0000";
+            String personId = person != null ? person.getPersonId() : "PID" + random.nextInt(100000);
+            
+            // Generate base time and duration
+            String startTimeStr = generateRandomTime(calDate, formatter);
+            int duration = 0;
+            String status = "接通";
+            String recordingAddr = "'https://servu-crm.oss-cn-hangzhou.aliyuncs.com/demo.wav'";
+            String callRecordId = String.valueOf(Math.abs(random.nextLong()));
+            
+            if (type == -1) {
+                status = "骚扰拦截";
+                // duration, start_time, end_time is NULL for failed calls in some requirements, but user said:
+                // "若call_flag-thru＞0... status=骚扰拦截...且chat_duration、start_time和end_time为null"
+                // But template has placeholders. We need to handle NULLs in SQL string.
+            } else {
+                // Determine duration based on type
+                if (type == 60) duration = 60 + random.nextInt(60);
+                else if (type == 30) duration = 30 + random.nextInt(30);
+                else if (type == 16) duration = 16 + random.nextInt(14);
+                else duration = 1 + random.nextInt(15);
+            }
+
+            // Flags to generate
+            List<String> flags = new ArrayList<>();
+            flags.add("call");
+            if (type >= 0) flags.add("thru");
+            if (type >= 16) flags.add("thru_16s");
+            if (type >= 30) flags.add("thru_30s");
+            if (type >= 60) flags.add("thru_60s");
+
+            for (String flag : flags) {
+                String sql = template
+                        .replace("{cal_date}", "'" + calDate + "'")
+                        .replace("{cust_mgr_id}", "'" + mgr.getCustMgrId() + "'")
+                        .replace("{cust_mgr_outlet_code}", "'" + mgr.getCustMgrOutletCode() + "'")
+                        .replace("{call_flag}", "'" + flag + "'")
+                        .replace("{cust_mgr_name}", "'" + mgr.getCustMgrName() + "'")
+                        .replace("{cust_mgr_outlet_name}", "'" + mgr.getCustMgrOutletName() + "'")
+                        .replace("{called_phone_number}", "'" + phone + "'")
+                        .replace("{call_direction}", "'呼出'")
+                        .replace("{call_record_id}", callRecordId)
+                        .replace("{person_id}", "'" + personId + "'");
+                
+                if (type == -1 && "call".equals(flag)) {
+                     // Special case for failed call
+                     sql = sql.replace("{chat_duration}", "NULL")
+                              .replace("{start_time}", "NULL")
+                              .replace("{end_time}", "NULL")
+                              .replace("{create_date}", "NULL") // User said create_date=start_time
+                              .replace("{status}", "'" + status + "'")
+                              .replace("{recording_address}", "NULL");
+                } else {
+                    LocalDateTime start = LocalDateTime.parse(startTimeStr, formatter);
+                    LocalDateTime end = start.plusSeconds(duration);
+                    sql = sql.replace("{chat_duration}", String.valueOf(duration))
+                             .replace("{start_time}", "'" + startTimeStr + "'")
+                             .replace("{end_time}", "'" + end.format(formatter) + "'")
+                             .replace("{create_date}", "'" + startTimeStr + "'")
+                             .replace("{status}", "'" + status + "'")
+                             .replace("{recording_address}", recordingAddr);
+                }
+                sqls.add(sql);
+            }
+        }
+    }
+
+    private void generateFollowDetails(List<String> sqls, String template, String calDate, CustMgrData mgr, int count, String followFlag, List<CustomerData> customers, DateTimeFormatter formatter) {
+        for (int i = 0; i < count; i++) {
+            CustomerData cust = customers.isEmpty() ? null : customers.get(random.nextInt(customers.size()));
+            String companyId = cust != null ? cust.getCustomerId() : UUID.randomUUID().toString().replace("-", "");
+            String custName = cust != null ? cust.getCustomerName() : "未知客户";
+            PersonInfoData person = referenceDataManager.getRandomPersonInfo();
+            String personId = person != null ? person.getPersonId() : "PID" + random.nextInt(100000);
+            String randomTime = generateRandomTime(calDate, formatter);
+
+            String sql = template
+                    .replace("{cal_date}", "'" + calDate + "'")
+                    .replace("{cust_mgr_id}", "'" + mgr.getCustMgrId() + "'")
+                    .replace("{cust_mgr_outlet_code}", "'" + mgr.getCustMgrOutletCode() + "'")
+                    .replace("{company_id}", "'" + companyId + "'")
+                    .replace("{customer_name}", "'" + custName + "'")
+                    .replace("{person_id}", "'" + personId + "'")
+                    .replace("{contact_time}", "'" + randomTime + "'")
+                    .replace("{business_action}", "'默认跟进'")
+                    .replace("{specific_item}", "'默认事项'")
+                    .replace("{follow_result}", "'默认结果'")
+                    .replace("{create_time}", "'" + randomTime + "'")
+                    .replace("{follow_way}", "'默认方式'")
+                    .replace("{follow_flag}", "'" + followFlag + "'");
+            sqls.add(sql);
+        }
+    }
+
+    private String generateRandomTime(String dateStr, DateTimeFormatter formatter) {
+        // dateStr is yyyy-MM-dd
+        LocalDate date = LocalDate.parse(dateStr);
+        return date.atTime(random.nextInt(24), random.nextInt(60), random.nextInt(60)).format(formatter);
+    }
+    
+    private String maskPhone(String phone) {
+        if (phone == null || phone.length() < 7) return phone;
+        return phone.substring(0, 3) + "****" + phone.substring(7);
+    }
+
     private static class EmployeeRecord {
         long customerId;
         String customerName;
@@ -293,6 +608,9 @@ public class DataGenController {
             // 1.5 针对汇总类生成器的特殊处理
             if ("customerReviewExpireSummary".equals(request.getGeneratorName())) {
                 return handleSummaryGeneration(request, definition, jdbcTemplate);
+            }
+            if ("itcrmCustMgrWorkloadStatistics".equals(request.getGeneratorName())) {
+                return handleWorkloadStatisticsGeneration(request, definition, jdbcTemplate);
             }
 
             // 2. 获取客户数据 (支持通过 extraParams 指定经理或具体客户)
@@ -463,20 +781,20 @@ public class DataGenController {
         DataGenResponse response = new DataGenResponse();
         Map<String, Object> extraParams = request.getExtraParams();
 
-        if (extraParams == null || !extraParams.containsKey("endDateMonth") || extraParams.get("endDateMonth") == null) {
-            response.setSuccess(false);
-            response.setMessage("参数 endDateMonth 不能为空");
-            return response;
+        String endDateMonth = null;
+        if (extraParams != null && extraParams.containsKey("endDateMonth") && extraParams.get("endDateMonth") != null) {
+            String val = String.valueOf(extraParams.get("endDateMonth")).trim();
+            if (!val.isEmpty() && !"null".equalsIgnoreCase(val)) {
+                endDateMonth = val;
+            }
         }
 
-        String endDateMonth = String.valueOf(extraParams.get("endDateMonth")).trim();
-        if (endDateMonth.isEmpty() || "null".equalsIgnoreCase(endDateMonth)) {
-            response.setSuccess(false);
-            response.setMessage("参数 endDateMonth 不能为空或无效");
-            return response;
+        if (endDateMonth == null) {
+            endDateMonth = YearMonth.now().toString(); // e.g. 2026-02
         }
+
         // 优先从 extraParams 获取 regionCode，如果没有则取外层的
-        String bigRegionCode = extraParams.containsKey("regionCode")
+        String bigRegionCode = (extraParams != null && extraParams.containsKey("regionCode"))
                 ? String.valueOf(extraParams.get("regionCode"))
                 : request.getRegionCode();
 

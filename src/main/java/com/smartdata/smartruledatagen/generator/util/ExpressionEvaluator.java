@@ -2,6 +2,7 @@ package com.smartdata.smartruledatagen.generator.util;
 
 import com.smartdata.smartruledatagen.generator.exception.DependencyNotMetException;
 import com.smartdata.smartruledatagen.model.CustMgrData;
+import com.smartdata.smartruledatagen.model.CustomerData;
 import com.smartdata.smartruledatagen.service.ReferenceDataManager;
 import com.smartdata.smartruledatagen.util.DateUtil;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +19,8 @@ import java.util.regex.Pattern;
 
 import java.util.List;
 
+import java.util.ArrayList;
+
 @Slf4j
 public class ExpressionEvaluator {
     private final ReferenceDataManager referenceDataManager;
@@ -29,24 +32,17 @@ public class ExpressionEvaluator {
         this.referenceDataManager = referenceDataManager;
     }
 
-    // 用于评估表达式。它会尝试解析表达式，支持简单字符串拼接、数字运算、方法调用
-    // 这是一个非常简化的版本，对于复杂表达式需要引入真实的脚本引擎
     public Object evaluate(String expression, Map<String, Object> recordData, Map<String, Object> params) {
         if (expression == null || expression.trim().isEmpty()) {
             return null;
         }
 
-        // 预处理：替换变量
-        // 注意：这种简单的替换可能会破坏字符串常量中的内容，但在当前受控环境下尚可接受
-        // 为了支持像 "cur_package_paid_amount + randomInt(-100, 100)" 这样的表达式
-        
-        // 1. 尝试解析为算术表达式 (目前仅支持 A + B 或 A - B，其中 A, B 可以是变量或函数)
-        // 简单的加减法解析器，不支持嵌套括号优先级，仅支持顶级加减
+        // 1. 尝试解析为算术表达式
         if (isArithmeticExpression(expression)) {
             return evaluateArithmetic(expression, recordData, params);
         }
 
-        // 2. 尝试解析为比较表达式 (支持 == 和 !=)
+        // 2. 尝试解析为比较表达式
         if (isComparisonExpression(expression)) {
             return evaluateComparison(expression, recordData, params);
         }
@@ -72,7 +68,6 @@ public class ExpressionEvaluator {
             return Boolean.parseBoolean(expression);
         }
 
-
         // 尝试解析为字段引用
         if (recordData.containsKey(expression)) {
             return recordData.get(expression);
@@ -88,17 +83,37 @@ public class ExpressionEvaluator {
 
         // 尝试解析为函数调用
         if (expression.contains("(")) {
-            // 简单处理：lookupCustMgrField(cust_mgr_id, 'custMgrName')
-            // lookupEnumCode('expect_renew_type', expect_renew_type)
             Pattern funcPattern = Pattern.compile("(\\w+)\\((.*)\\)");
             Matcher funcMatcher = funcPattern.matcher(expression);
             if (funcMatcher.find()) {
                 String funcName = funcMatcher.group(1);
                 String argsStr = funcMatcher.group(2);
-                String[] args = argsStr.split("\\s*,\\s*"); // 分割参数
+                
+                // 使用 parseArgs 替代简单的 split
+                List<String> argsList = parseArgs(argsStr);
+                String[] args = argsList.toArray(new String[0]);
 
                 switch (funcName) {
+                    case "getParamOrDefault":
+                        // Args: paramName, defaultExpression
+                        if (args.length == 2) {
+                            String paramKey = args[0].trim();
+                            // 去除可能的引号
+                            if (paramKey.startsWith("'") && paramKey.endsWith("'")) {
+                                paramKey = paramKey.substring(1, paramKey.length() - 1);
+                            }
+                            
+                            // 检查 params 中是否有该 key (直接匹配 key，不需要 param. 前缀)
+                            if (params.containsKey(paramKey) && params.get(paramKey) != null) {
+                                return params.get(paramKey);
+                            } else {
+                                // 如果没有，评估默认表达式
+                                return evaluate(args[1].trim(), recordData, params);
+                            }
+                        }
+                        return null;
                     case "randomInt":
+                        // ... (rest of the switch cases)
                         if (args.length == 2) {
                             int min = (int) evaluate(args[0], recordData, params);
                             int max = (int) evaluate(args[1], recordData, params);
@@ -215,6 +230,18 @@ public class ExpressionEvaluator {
                             }
                         }
                         return null;
+                    case "lookupCustomerField":
+                        if (args.length == 2) {
+                            Object customerIdObj = evaluate(args[0], recordData, params);
+                            String fieldName = (String) evaluate(args[1], recordData, params);
+                            if (customerIdObj instanceof String customerId) {
+                                Optional<CustomerData> customerData = referenceDataManager.getCustomerById(customerId);
+                                if (customerData.isPresent()) {
+                                    return getCustomerField(customerData.get(), fieldName);
+                                }
+                            }
+                        }
+                        return null;
                     case "lookupEnumCode":
                     case "lookupEnumName":
                         if (args.length == 2) {
@@ -262,6 +289,24 @@ public class ExpressionEvaluator {
                             }
                         }
                         return null;
+                    case "lastDayOfMonth":
+                        // Args: optionalMonthStr (yyyy-MM)
+                        LocalDate dateForLastDay = LocalDate.now();
+                        if (args.length >= 1) {
+                            try {
+                                Object monthObj = evaluate(args[0], recordData, params);
+                                if (monthObj instanceof String && !((String) monthObj).isEmpty() && !"null".equalsIgnoreCase((String)monthObj)) {
+                                    java.time.YearMonth ym = java.time.YearMonth.parse((String) monthObj, java.time.format.DateTimeFormatter.ofPattern("yyyy-MM"));
+                                    dateForLastDay = ym.atEndOfMonth();
+                                    return DateUtil.formatDate(dateForLastDay);
+                                }
+                            } catch (Exception e) {
+                                // If param not found or invalid, fallback to current month
+                                log.warn("Failed to evaluate month for lastDayOfMonth, using current month. Error: {}", e.getMessage());
+                            }
+                        }
+                        // Default to current month's last day
+                        return DateUtil.formatDate(dateForLastDay.withDayOfMonth(dateForLastDay.lengthOfMonth()));
                     // TODO: Add more helper functions as needed
                 }
             }
@@ -315,6 +360,36 @@ public class ExpressionEvaluator {
     }
 
 
+    private List<String> parseArgs(String argsStr) {
+        List<String> args = new ArrayList<>();
+        if (argsStr == null || argsStr.trim().isEmpty()) {
+            return args;
+        }
+
+        int parenthesisCount = 0;
+        StringBuilder currentArg = new StringBuilder();
+
+        for (int i = 0; i < argsStr.length(); i++) {
+            char c = argsStr.charAt(i);
+            if (c == '(') {
+                parenthesisCount++;
+            } else if (c == ')') {
+                parenthesisCount--;
+            }
+
+            if (c == ',' && parenthesisCount == 0) {
+                args.add(currentArg.toString().trim());
+                currentArg.setLength(0);
+            } else {
+                currentArg.append(c);
+            }
+        }
+        if (currentArg.length() > 0) {
+            args.add(currentArg.toString().trim());
+        }
+        return args;
+    }
+
     private Object getCustMgrField(CustMgrData data, String fieldName) {
         try {
             // 使用反射获取 CustMgrData 的字段值
@@ -324,6 +399,18 @@ public class ExpressionEvaluator {
             return method.invoke(data);
         } catch (Exception e) {
             log.error("Failed to get field {} from CustMgrData using reflection.", fieldName, e);
+            return null;
+        }
+    }
+
+    private Object getCustomerField(CustomerData data, String fieldName) {
+        try {
+            // 使用反射获取 CustomerData 的字段值
+            String getterMethodName = "get" + Character.toUpperCase(fieldName.charAt(0)) + fieldName.substring(1);
+            Method method = CustomerData.class.getMethod(getterMethodName);
+            return method.invoke(data);
+        } catch (Exception e) {
+            log.error("Failed to get field {} from CustomerData using reflection.", fieldName, e);
             return null;
         }
     }

@@ -1,9 +1,6 @@
 package com.smartdata.smartruledatagen.service;
 
-import com.smartdata.smartruledatagen.model.CustMgrData;
-import com.smartdata.smartruledatagen.model.CustomerData;
-import com.smartdata.smartruledatagen.model.EnumMapping;
-import com.smartdata.smartruledatagen.model.RegionProvinceData;
+import com.smartdata.smartruledatagen.model.*;
 import org.apache.poi.ss.usermodel.*;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
@@ -23,6 +20,42 @@ public class ExcelDataLoaderService {
             return path.substring("src/main/resources/".length());
         }
         return path;
+    }
+
+    public List<PersonInfoData> loadPersonInfoData(String filePath) {
+        List<PersonInfoData> dataList = new ArrayList<>();
+        filePath = cleanPath(filePath);
+        ClassPathResource resource = new ClassPathResource(filePath);
+
+        if (!resource.exists()) {
+            return dataList;
+        }
+
+        try (InputStream fis = resource.getInputStream();
+             Workbook workbook = WorkbookFactory.create(fis)) {
+
+            Sheet sheet = workbook.getSheetAt(0);
+            boolean firstRow = true;
+            for (Row row : sheet) {
+                if (firstRow) {
+                    firstRow = false;
+                    continue;
+                }
+                if (row.getCell(0) == null || row.getCell(0).getCellType() == CellType.BLANK) {
+                    continue;
+                }
+
+                PersonInfoData data = new PersonInfoData();
+                // 假设列顺序: 0: calledPhoneNumber, 1: personId
+                data.setCalledPhoneNumber(getCellValue(row.getCell(0)));
+                data.setPersonId(getCellValue(row.getCell(1)));
+                dataList.add(data);
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return dataList;
     }
 
     public List<CustMgrData> loadCustMgrData(String filePath) {

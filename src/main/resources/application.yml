@@ -10,6 +10,11 @@ spring:
       username: root
       password: test_user_pass66
       driver-class-name: com.mysql.cj.jdbc.Driver
+    db3:
+      jdbc-url: jdbc:mysql://10.199.156.144:3306/servyou_ads?useSSL=false&serverTimezone=UTC
+      username: admin
+      password: test_admin_123
+      driver-class-name: com.mysql.cj.jdbc.Driver
     ck: # ClickHouse 数据库配置
       jdbc-url: jdbc:clickhouse://10.199.141.62:8123/default?compress=0
       username: clickhouse

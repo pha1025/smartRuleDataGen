@@ -113,6 +113,41 @@ public class SqlTemplateRepository {
                         "        ,t.end_date_month\n" +
                         "        ,case when t.big_region_code is not null then t.big_region_code else '000000' end\n" +
                         "        ,t.province_city_area_code;");
+
+        // 例7: ads_itcrm_cust_mgr_compliance_info 模板
+        templates.put("itcrm_cust_mgr_compliance_info",
+                "INSERT INTO servyou_ads.ads_itcrm_cust_mgr_compliance_info " +
+                        "(oc_company_id, cust_mgr_id, cust_mgr_name, cust_mgr_outlet_code, cust_mgr_outlet_name, new_jzjf_level, end_date, province_city_area_code, big_region_code) " +
+                        "VALUES " +
+                        "({oc_company_id}, {cust_mgr_id}, {cust_mgr_name}, {cust_mgr_outlet_code}, {cust_mgr_outlet_name}, {new_jzjf_level}, {end_date}, {province_city_area_code}, {big_region_code})");
+
+        // 例8: ads_itcrm_cust_mgr_workload_statistics_rt 主表模板
+        templates.put("itcrm_cust_mgr_workload_statistics",
+                "INSERT INTO servyou_ads.ads_itcrm_cust_mgr_workload_statistics_rt " +
+                        "(cal_date, cust_mgr_id, cust_mgr_outlet_code, cust_mgr_name, cust_mgr_outlet_name, call_num, thru_num, thru_16s_num, thru_30s_num, thru_60s_num, chat_duration, visit_num, remote_num, wxwork_num, call_follow_num, wxwork_follow_num) " +
+                        "VALUES " +
+                        "({cal_date}, {cust_mgr_id}, {cust_mgr_outlet_code}, {cust_mgr_name}, {cust_mgr_outlet_name}, {call_num}, {thru_num}, {thru_16s_num}, {thru_30s_num}, {thru_60s_num}, {chat_duration}, {visit_num}, {remote_num}, {wxwork_num}, {call_follow_num}, {wxwork_follow_num})");
+
+        // 例9: ads_itcrm_cust_mgr_workload_detail_rt 子表1模板
+        templates.put("itcrm_cust_mgr_workload_detail",
+                "INSERT INTO servyou_ads.ads_itcrm_cust_mgr_workload_detail_rt " +
+                        "(cal_date, cust_mgr_id, cust_mgr_outlet_code, call_flag, cust_mgr_name, cust_mgr_outlet_name, called_phone_number, chat_duration, create_date, start_time, end_time, status, call_direction, recording_address, call_record_id, person_id) " +
+                        "VALUES " +
+                        "({cal_date}, {cust_mgr_id}, {cust_mgr_outlet_code}, {call_flag}, {cust_mgr_name}, {cust_mgr_outlet_name}, {called_phone_number}, {chat_duration}, {create_date}, {start_time}, {end_time}, {status}, {call_direction}, {recording_address}, {call_record_id}, {person_id})");
+
+        // 例10: ads_itcrm_cust_mgr_workload_visit_door_detail_rt 子表2模板
+        templates.put("itcrm_cust_mgr_workload_visit_door_detail",
+                "INSERT INTO servyou_ads.ads_itcrm_cust_mgr_workload_visit_door_detail_rt " +
+                        "(cal_date, cust_mgr_id, cust_mgr_outlet_code, company_id, customer_name, sign_in_time, sign_in_address, sign_out_time, sign_out_address, contact_time, business_action, specific_item, follow_result, follow_record, create_time) " +
+                        "VALUES " +
+                        "({cal_date}, {cust_mgr_id}, {cust_mgr_outlet_code}, {company_id}, {customer_name}, {sign_in_time}, {sign_in_address}, {sign_out_time}, {sign_out_address}, {contact_time}, {business_action}, {specific_item}, {follow_result}, {follow_record}, {create_time})");
+
+        // 例11: ads_itcrm_cust_mgr_workload_follow_record_detail_rt 子表3模板
+        templates.put("itcrm_cust_mgr_workload_follow_record_detail",
+                "INSERT INTO servyou_ads.ads_itcrm_cust_mgr_workload_follow_record_detail_rt " +
+                        "(cal_date, cust_mgr_id, cust_mgr_outlet_code, company_id, customer_name, person_id, contact_time, business_action, specific_item, follow_result, create_time, follow_way, follow_flag) " +
+                        "VALUES " +
+                        "({cal_date}, {cust_mgr_id}, {cust_mgr_outlet_code}, {company_id}, {customer_name}, {person_id}, {contact_time}, {business_action}, {specific_item}, {follow_result}, {create_time}, {follow_way}, {follow_flag})");
     }
 
     public String getTemplate(String key) {
